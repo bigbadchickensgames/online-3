@@ -78,5 +78,5 @@ public class ProyectilBasico : MonoBehaviourPun
     private void DestruirBala()
     {
         PhotonNetwork.Destroy(gameObject);
-    }
+    }//si
 }
