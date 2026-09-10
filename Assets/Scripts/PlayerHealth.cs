@@ -37,6 +37,6 @@ public class PlayerHealth : MonoBehaviourPun
             }
 
             PhotonNetwork.Destroy(gameObject);
-        }
+        }  //si
     }
 }
