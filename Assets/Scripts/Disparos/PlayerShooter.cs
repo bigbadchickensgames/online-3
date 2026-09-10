@@ -96,16 +96,17 @@ public class PlayerShooter : MonoBehaviourPun
         direccionLanzamiento.y += anguloElevacionTrampa * 0.05f;
         direccionLanzamiento.Normalize();
 
-        GameObject trampaGO = PhotonNetwork.Instantiate(
+        // NUEVO: Calculamos la fuerza y la empaquetamos
+        Vector3 velocidadImpulso = direccionLanzamiento * fuerzaLanzamientoTrampa;
+        object[] datosInstanciacion = new object[] { velocidadImpulso };
+
+        // NUEVO: Instanciamos mandando el vector a todos los clientes a la vez
+        PhotonNetwork.Instantiate(
             armaActual.nombrePrefabTrampaNet, 
             puntoDeDisparo.position, 
-            Quaternion.LookRotation(direccionLanzamiento)
+            Quaternion.LookRotation(direccionLanzamiento),
+            0,
+            datosInstanciacion
         );
-
-        Rigidbody rbTrampa = trampaGO.GetComponent<Rigidbody>();
-        if (rbTrampa != null)
-        {
-            rbTrampa.linearVelocity = direccionLanzamiento * fuerzaLanzamientoTrampa;
-        }
     }
 }

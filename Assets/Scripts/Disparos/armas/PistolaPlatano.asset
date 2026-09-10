@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DatosArma
   nombreArma: Platano
   nombrePrefabProyectilNet: Bala
-  municionMaxima: 2
+  municionMaxima: 7
   cadenciaDisparo: 0.3
   velocidadProyectil: 20
   dano: 25

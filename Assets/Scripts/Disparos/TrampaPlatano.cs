@@ -2,7 +2,7 @@ using UnityEngine;
 using Photon.Pun;
 using System.Collections;
 
-public class TrampaPlatano : MonoBehaviourPun
+public class TrampaPlatano : MonoBehaviourPun, IPunInstantiateMagicCallback
 {
     [Header("Ajustes del Resbalón")]
     public float fuerzaEmpuje = 15f;
@@ -16,6 +16,21 @@ public class TrampaPlatano : MonoBehaviourPun
     private void Start()
     {
         StartCoroutine(ActivarTrampaConRetraso());
+    }
+
+    // NUEVO: Esto lo ejecuta Photon automáticamente en TODOS los clientes cuando el objeto se instancia
+    public void OnPhotonInstantiate(PhotonMessageInfo info)
+    {
+        object[] data = info.photonView.InstantiationData;
+        if (data != null && data.Length > 0)
+        {
+            Vector3 velocidadLanzamiento = (Vector3)data[0];
+            Rigidbody rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.linearVelocity = velocidadLanzamiento;
+            }
+        }
     }
 
     private IEnumerator ActivarTrampaConRetraso()

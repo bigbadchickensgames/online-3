@@ -202,6 +202,33 @@ public class Luncher : MonoBehaviourPunCallbacks
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        
+        LimpiarEscenario(); // NUEVO: Llamamos a la limpieza general
+
         SpawnearJugador();
+    }
+
+    // NUEVO: Función para destruir todos los objetos residuales de la ronda anterior
+    private void LimpiarEscenario()
+    {
+        // 1. Limpiar todas las trampas (cada jugador destruye las que él mismo lanzó)
+        TrampaPlatano[] trampas = FindObjectsByType<TrampaPlatano>(FindObjectsSortMode.None);
+        foreach (TrampaPlatano trampa in trampas)
+        {
+            if (trampa.photonView.IsMine)
+            {
+                PhotonNetwork.Destroy(trampa.gameObject);
+            }
+        }
+
+        // 2. Por si acaso hay balas volando en el momento que termina la ronda, las limpiamos también
+        ProyectilBasico[] balas = FindObjectsByType<ProyectilBasico>(FindObjectsSortMode.None);
+        foreach (ProyectilBasico bala in balas)
+        {
+            if (bala.photonView.IsMine)
+            {
+                PhotonNetwork.Destroy(bala.gameObject);
+            }
+        }
     }
 }
