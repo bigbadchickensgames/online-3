@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15ee7857e77aa9f4394afb4749535399, type: 3}
+  m_Name: PescaoCongelao
+  m_EditorClassIdentifier: Assembly-CSharp::DatosArma
+  nombreArma: PescaoCongelao
+  tipoArma: 1
+  cadenciaDisparo: 0.3
+  nombrePrefabModeloArma: Pescao
+  nombrePrefabProyectilNet: 
+  municionMaxima: 6
+  velocidadProyectil: 20
+  dano: 25
+  efectoVacio: 1
+  nombrePrefabTrampaNet: 
+  danoMelee: 20
+  rangoMelee: 2
+  radioMelee: 1
+  ralentizacionMultiplicador: 0.4
+  ralentizacionDuracion: 2.5
+  anguloGolpeMelee: {x: 0, y: -90, z: 0}
+  duracionIdaGolpeMelee: 0.12
+  duracionVueltaGolpeMelee: 0.25

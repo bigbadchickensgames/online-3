@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using Photon.Pun;
@@ -20,6 +21,9 @@ public class PlayerController : MonoBehaviourPunCallbacks
     public float limiteVerticalMin = -30f;
     public float limiteVerticalMax = 70f;
 
+    [Header("Disparo - Giro de Apuntado")]
+    public float velocidadGiroDisparo = 720f; // grados/seg. Más alto = giro casi instantáneo, más bajo = se nota el giro
+
     public bool EstaVivo { get; private set; } = true;
 
     private Rigidbody rb;
@@ -33,8 +37,9 @@ public class PlayerController : MonoBehaviourPunCallbacks
     private float rotacionX;
     private float rotacionY;
 
-    private bool estaResbalando = false;
-    private float velocidadGuardadaOriginal;
+    private float velocidadBase; // velocidad normal del jugador, referencia para restaurar tras efectos temporales
+
+    private bool girandoParaDisparar = false;
 
     void Start()
     {
@@ -43,6 +48,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
         rb.freezeRotation = true;
         rb.useGravity = false;
         gravedadBase = Mathf.Abs(Physics.gravity.y);
+        velocidadBase = velocidad;
 
         if (photonView.IsMine)
         {
@@ -132,7 +138,8 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
             direccionMovimiento = (camForward * direccionInput.z + camRight * direccionInput.x).normalized;
 
-            if (direccionMovimiento.sqrMagnitude > 0.001f)
+            // No rotamos por movimiento mientras se está ejecutando el giro de apuntado del disparo
+            if (direccionMovimiento.sqrMagnitude > 0.001f && !girandoParaDisparar)
             {
                 Quaternion rotacionObjetivo = Quaternion.LookRotation(direccionMovimiento);
                 rb.MoveRotation(Quaternion.Slerp(rb.rotation, rotacionObjetivo, velocidadRotacion * Time.fixedDeltaTime));
@@ -186,12 +193,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
     private IEnumerator RutinaResbalon(float fuerza, float duracion)
     {
-        if (!estaResbalando)
-        {
-            velocidadGuardadaOriginal = velocidad;
-            estaResbalando = true;
-        }
-
         velocidad = 1.5f;
 
         if (rb != null)
@@ -202,7 +203,52 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
         yield return new WaitForSeconds(duracion);
 
-        velocidad = velocidadGuardadaOriginal;
-        estaResbalando = false;
+        velocidad = velocidadBase;
+    }
+
+    // NUEVO: Gira el cuerpo entero hacia el yaw actual de la cámara (rotacionY) y, al terminar,
+    // ejecuta el callback que dispara/ataca. Mientras gira, se bloquea la rotación por movimiento.
+    public void GirarHaciaCamaraYDisparar(Action alTerminarGiro)
+    {
+        if (!photonView.IsMine) return;
+        StartCoroutine(RutinaGirarYDisparar(alTerminarGiro));
+    }
+
+    private IEnumerator RutinaGirarYDisparar(Action alTerminarGiro)
+    {
+        girandoParaDisparar = true;
+        Quaternion rotacionObjetivo = Quaternion.Euler(0f, rotacionY, 0f);
+
+        while (Quaternion.Angle(rb.rotation, rotacionObjetivo) > 1f)
+        {
+            Quaternion nuevaRotacion = Quaternion.RotateTowards(rb.rotation, rotacionObjetivo, velocidadGiroDisparo * Time.deltaTime);
+            rb.MoveRotation(nuevaRotacion);
+            yield return new WaitForFixedUpdate();
+        }
+
+        rb.MoveRotation(rotacionObjetivo);
+        girandoParaDisparar = false;
+        alTerminarGiro?.Invoke();
+    }
+
+    // NUEVO: Llamado por el atacante para ralentizar a esta víctima en todos los clientes (efecto "pez congelado")
+    public void AplicarRalentizacionRed(float multiplicador, float duracion)
+    {
+        photonView.RPC(nameof(RPC_AplicarRalentizacion), RpcTarget.All, multiplicador, duracion);
+    }
+
+    [PunRPC]
+    private void RPC_AplicarRalentizacion(float multiplicador, float duracion)
+    {
+        StartCoroutine(RutinaRalentizacion(multiplicador, duracion));
+    }
+
+    private IEnumerator RutinaRalentizacion(float multiplicador, float duracion)
+    {
+        velocidad = velocidadBase * multiplicador;
+
+        yield return new WaitForSeconds(duracion);
+
+        velocidad = velocidadBase;
     }
 }
