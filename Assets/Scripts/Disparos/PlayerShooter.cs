@@ -7,11 +7,11 @@ public class PlayerShooter : MonoBehaviourPun
     [Header("Arma Equipada")]
     public DatosArma armaActual;
 
-    [Tooltip("Se asigna automáticamente al equipar el arma, buscando un hijo llamado 'PuntoDisparo' dentro del modelo instanciado. No hace falta asignarlo a mano.")]
+    [Tooltip("Se asigna automáticamente al equipar el arma buscando 'PuntoDisparo'.")]
     public Transform puntoDeDisparo;
 
     [Header("Socket del Modelo Visual del Arma")]
-    public Transform socketArma; // Transform vacío donde se instancia el modelo 3D de cada arma
+    public Transform socketArma;
 
     [Header("Configuración de Lanzamiento de Trampa")]
     public float fuerzaLanzamientoTrampa = 15f;
@@ -23,6 +23,9 @@ public class PlayerShooter : MonoBehaviourPun
 
     private PlayerController controladorJugador;
     private GameObject modeloArmaActualInstancia;
+    
+    // NUEVO: Controlamos la corrutina del golpe para que no se superpongan
+    private Coroutine corrutinaMeleeActual;
 
     void Start()
     {
@@ -36,26 +39,66 @@ public class PlayerShooter : MonoBehaviourPun
 
     public void EquiparArma(DatosArma nuevaArma)
     {
-        armaActual = nuevaArma;
-        municionRestante = armaActual.municionMaxima;
+        if (nuevaArma == null) return;
 
-        // Habilitamos la trampa si el Scriptable Object tiene configurado el efecto
-        tieneTrampaDisponible = (armaActual.tipoArma == TipoArma.Disparo && armaActual.efectoVacio == TipoEfectoVacio.TirarComoTrampa);
-
-        // Actualizamos el modelo localmente YA (no esperamos a la RPC, para no tener un frame con puntoDeDisparo nulo)
-        ActualizarModeloArmaLocal(armaActual.nombrePrefabModeloArma);
-
-        // Y avisamos al resto de clientes para que también lo actualicen
         if (photonView.IsMine)
         {
-            photonView.RPC(nameof(RPC_ActualizarModeloArma), RpcTarget.Others, armaActual.nombrePrefabModeloArma);
+            photonView.RPC(nameof(RPC_EquiparArmaRed), RpcTarget.AllBuffered, nuevaArma.name);
         }
     }
 
     [PunRPC]
-    private void RPC_ActualizarModeloArma(string nombrePrefabModelo)
+    private void RPC_EquiparArmaRed(string nombreDatosArma)
     {
-        ActualizarModeloArmaLocal(nombrePrefabModelo);
+        DatosArma datosCargados = Resources.Load<DatosArma>(nombreDatosArma);
+
+        if (datosCargados == null)
+        {
+            DatosArma[] todas = Resources.LoadAll<DatosArma>("");
+            datosCargados = System.Array.Find(todas, a => a.name == nombreDatosArma);
+        }
+
+        if (datosCargados == null)
+        {
+            Debug.LogError($"[PlayerShooter] No se encontró el ScriptableObject '{nombreDatosArma}'.");
+            return;
+        }
+
+        armaActual = datosCargados;
+        municionRestante = armaActual.municionMaxima;
+        tieneTrampaDisponible = (armaActual.tipoArma == TipoArma.Disparo && armaActual.efectoVacio == TipoEfectoVacio.TirarComoTrampa);
+
+        ActualizarModeloArmaLocal(armaActual.nombrePrefabModeloArma);
+    }
+
+    public void DesequiparArma()
+    {
+        if (photonView.IsMine)
+        {
+            photonView.RPC(nameof(RPC_DesequiparArmaRed), RpcTarget.AllBuffered);
+        }
+    }
+
+    [PunRPC]
+    private void RPC_DesequiparArmaRed()
+    {
+        armaActual = null;
+        municionRestante = 0;
+        tieneTrampaDisponible = false;
+
+        if (modeloArmaActualInstancia != null)
+        {
+            Destroy(modeloArmaActualInstancia);
+        }
+        puntoDeDisparo = null;
+    }
+
+    private void ComprobarAgotamientoArma()
+    {
+        if (municionRestante <= 0 && !tieneTrampaDisponible)
+        {
+            DesequiparArma();
+        }
     }
 
     private void ActualizarModeloArmaLocal(string nombrePrefabModelo)
@@ -66,24 +109,49 @@ public class PlayerShooter : MonoBehaviourPun
         }
         puntoDeDisparo = null;
 
-        if (string.IsNullOrEmpty(nombrePrefabModelo) || socketArma == null) return;
+        // --- ARREGLO DE ANIMACIÓN Y MANO TORCIDA ---
+        if (corrutinaMeleeActual != null) 
+        {
+            StopCoroutine(corrutinaMeleeActual);
+            corrutinaMeleeActual = null;
+        }
+        if (socketArma != null) 
+        {
+            socketArma.localRotation = Quaternion.identity; // Aseguramos que la mano vuelve a su sitio
+        }
+        // ---------------------------------------------
+
+        if (socketArma == null || string.IsNullOrEmpty(nombrePrefabModelo)) return;
 
         GameObject prefabModelo = Resources.Load<GameObject>(nombrePrefabModelo);
         if (prefabModelo == null)
         {
-            Debug.LogWarning($"No se encontró el prefab de modelo '{nombrePrefabModelo}' en ninguna carpeta Resources.");
+            Debug.LogError($"[PlayerShooter] No se encontró el prefab '{nombrePrefabModelo}'.");
             return;
         }
 
         modeloArmaActualInstancia = Instantiate(prefabModelo, socketArma);
-        modeloArmaActualInstancia.transform.localPosition = Vector3.zero;
-        modeloArmaActualInstancia.transform.localRotation = Quaternion.identity;
+
+        // --- ARREGLO DEL PESCAO (Respetar el Prefab) ---
+        // Volvemos a coger LA ROTACIÓN DEL PREFAB EXACTA. Si el pescao necesita estar girado 90º,
+        // esto lo respetará sin heredar rotaciones raras de cuando estaba en el suelo.
+        modeloArmaActualInstancia.transform.localPosition = prefabModelo.transform.localPosition;
+        modeloArmaActualInstancia.transform.localRotation = prefabModelo.transform.localRotation;
+        modeloArmaActualInstancia.transform.localScale = prefabModelo.transform.localScale;
+        // -----------------------------------------------
+
+        foreach (PickupArma pickup in modeloArmaActualInstancia.GetComponentsInChildren<PickupArma>())
+        {
+            pickup.enabled = false; 
+            Destroy(pickup);
+        }
+
+        foreach (Collider col in modeloArmaActualInstancia.GetComponentsInChildren<Collider>())
+        {
+            col.enabled = false;
+        }
 
         puntoDeDisparo = BuscarPuntoDisparoRecursivo(modeloArmaActualInstancia.transform);
-        if (puntoDeDisparo == null)
-        {
-            Debug.LogWarning($"El prefab '{nombrePrefabModelo}' no tiene ningún hijo llamado exactamente 'PuntoDisparo'.");
-        }
     }
 
     private Transform BuscarPuntoDisparoRecursivo(Transform raiz)
@@ -105,18 +173,16 @@ public class PlayerShooter : MonoBehaviourPun
 
         if (Input.GetButtonDown("Fire1") && Time.time >= tiempoUltimoDisparo + armaActual.cadenciaDisparo)
         {
-            // Reservamos el tiempo de ataque ya, para que no se pueda spamear mientras el jugador gira
             tiempoUltimoDisparo = Time.time;
             controladorJugador.GirarHaciaCamaraYDisparar(EjecutarAccionDeAtaque);
         }
     }
 
-    // Se llama cuando el giro hacia la cámara ha terminado
     private void EjecutarAccionDeAtaque()
     {
         if (puntoDeDisparo == null)
         {
-            Debug.LogWarning("No se puede atacar: el arma actual no tiene un 'PuntoDisparo' asignado.");
+            Debug.LogWarning("No se puede atacar: falta 'PuntoDisparo'.");
             return;
         }
 
@@ -126,19 +192,13 @@ public class PlayerShooter : MonoBehaviourPun
             return;
         }
 
-        // 1. Si aún nos quedan balas normales
         if (municionRestante > 0)
         {
             DispararBala();
         }
-        // 2. Si nos quedamos sin balas normales, pero aún nos queda el tiro extra de la trampa
         else if (tieneTrampaDisponible)
         {
             LanzarTrampaExtra();
-        }
-        else
-        {
-            Debug.Log("¡Arma totalmente vacía!");
         }
     }
 
@@ -146,8 +206,6 @@ public class PlayerShooter : MonoBehaviourPun
     {
         municionRestante--;
 
-        // La bala sale exactamente en la dirección en la que apunta el arma,
-        // que ya está alineada con la cámara gracias al giro previo del cuerpo
         GameObject bala = PhotonNetwork.Instantiate(
             armaActual.nombrePrefabProyectilNet,
             puntoDeDisparo.position,
@@ -159,14 +217,18 @@ public class PlayerShooter : MonoBehaviourPun
         {
             proyectil.velocidad = armaActual.velocidadProyectil;
             proyectil.dano = armaActual.dano;
+            proyectil.titularMuerte = armaActual.titularMuerte;
+            proyectil.puntosPorBaja = armaActual.puntosPorBaja;
         }
+
+        ComprobarAgotamientoArma();
     }
 
     private void LanzarTrampaExtra()
     {
         if (string.IsNullOrEmpty(armaActual.nombrePrefabTrampaNet)) return;
 
-        tieneTrampaDisponible = false; // Consumimos el tiro extra de la trampa
+        tieneTrampaDisponible = false;
 
         Vector3 direccionLanzamiento = puntoDeDisparo.forward;
         direccionLanzamiento.y += anguloElevacionTrampa * 0.05f;
@@ -182,11 +244,12 @@ public class PlayerShooter : MonoBehaviourPun
             0,
             datosInstanciacion
         );
+
+        ComprobarAgotamientoArma();
     }
 
     private void EjecutarAtaqueMelee()
     {
-        // Avisamos a TODOS los clientes (incluido tú) para que reproduzcan el swing del arma
         photonView.RPC(nameof(RPC_ReproducirAnimacionMelee), RpcTarget.All);
 
         Vector3 centroGolpe = puntoDeDisparo.position + puntoDeDisparo.forward * armaActual.rangoMelee;
@@ -196,13 +259,12 @@ public class PlayerShooter : MonoBehaviourPun
         {
             PhotonView pvImpactado = col.GetComponentInParent<PhotonView>();
 
-            // Ignoramos nuestro propio collider
             if (pvImpactado == null || pvImpactado.Owner == photonView.Owner) continue;
 
             PlayerHealth saludEnemigo = col.GetComponentInParent<PlayerHealth>();
             if (saludEnemigo != null)
             {
-                saludEnemigo.photonView.RPC("RecibirDano", RpcTarget.All, armaActual.danoMelee);
+                saludEnemigo.photonView.RPC("RecibirDano", RpcTarget.All, armaActual.danoMelee, photonView.Owner.ActorNumber, armaActual.titularMuerte, armaActual.puntosPorBaja);
             }
 
             PlayerController controladorEnemigo = col.GetComponentInParent<PlayerController>();
@@ -218,19 +280,26 @@ public class PlayerShooter : MonoBehaviourPun
     {
         if (armaActual == null || socketArma == null) return;
         
-        // Ahora le pasamos el socketArma en lugar del modelo instanciado
-        StartCoroutine(RutinaAnimacionMelee(socketArma, armaActual));
+        // --- ARREGLO DE SPAM DE CLICKS ---
+        // Si ya había una animación reproduciéndose, la paramos para que los ángulos no se acumulen
+        if (corrutinaMeleeActual != null)
+        {
+            StopCoroutine(corrutinaMeleeActual);
+        }
+        
+        corrutinaMeleeActual = StartCoroutine(RutinaAnimacionMelee(socketArma, armaActual));
     }
 
     private IEnumerator RutinaAnimacionMelee(Transform pivoteAnimacion, DatosArma datosDelGolpe)
     {
-        // Guardamos la rotación original del Socket
-        Quaternion rotacionOriginal = pivoteAnimacion.localRotation;
-        
-        // Calculamos la rotación final sumándole el ángulo deseado (ej: 0, 90, 0)
+        // VITAL: La rotación original SIEMPRE es neutra (0,0,0). No cogemos cómo estuviese la mano
+        // en este instante concreto, porque si spammeabas click, se iba torciendo poco a poco.
+        Quaternion rotacionOriginal = Quaternion.identity; 
         Quaternion rotacionDelGolpe = rotacionOriginal * Quaternion.Euler(datosDelGolpe.anguloGolpeMelee);
 
-        // FASE 1: Ida (El golpe)
+        // Forzamos a la mano a ponerse recta justo al empezar
+        pivoteAnimacion.localRotation = rotacionOriginal;
+
         float t = 0f;
         while (t < datosDelGolpe.duracionIdaGolpeMelee)
         {
@@ -240,7 +309,6 @@ public class PlayerShooter : MonoBehaviourPun
             yield return null;
         }
 
-        // FASE 2: Vuelta (Recuperar la postura)
         t = 0f;
         while (t < datosDelGolpe.duracionVueltaGolpeMelee)
         {
@@ -250,17 +318,20 @@ public class PlayerShooter : MonoBehaviourPun
             yield return null;
         }
 
-        // Aseguramos que termine exactamente donde empezó para evitar desvíos
+        // Al terminar, nos aseguramos al 100% que vuelve a la posición base perfecta
         pivoteAnimacion.localRotation = rotacionOriginal;
+        corrutinaMeleeActual = null; // Vaciamos la variable porque ya hemos terminado
     }
 
-    // Útil para depurar el rango del golpe melee en el Editor
-    private void OnDrawGizmosSelected()
+    private void OnDrawGizmos()
     {
         if (armaActual == null || armaActual.tipoArma != TipoArma.Melee || puntoDeDisparo == null) return;
 
         Gizmos.color = Color.red;
         Vector3 centroGolpe = puntoDeDisparo.position + puntoDeDisparo.forward * armaActual.rangoMelee;
         Gizmos.DrawWireSphere(centroGolpe, armaActual.radioMelee);
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(puntoDeDisparo.position, centroGolpe);
     }
 }

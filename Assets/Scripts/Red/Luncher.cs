@@ -17,6 +17,12 @@ public class Luncher : MonoBehaviourPunCallbacks
     [Header("UI de Transición / Fin de Ronda")]
     public UIResultadosController uiResultados;
 
+    // --- NUEVO: SISTEMA DE RONDAS ---
+    [Header("Configuración de Partida")]
+    public int rondaActual = 1;
+    public int maxRondas = 5;
+    // --------------------------------
+
     private GameObject jugadorLocalActual;
     private int jugadoresVivos = 0;
 
@@ -120,23 +126,28 @@ public class Luncher : MonoBehaviourPunCallbacks
                 if (p.EstaVivo)
                 {
                     ganador = p.photonView.Owner.NickName;
+                    
+                    // Opcional: Le damos unos puntitos extra por ser el último en pie
+                    ScoreManager.SumarPuntos(p.photonView.Owner, 150); 
                     break;
                 }
             }
 
-            photonView.RPC(nameof(RPC_MostrarFinDeRonda), RpcTarget.All, ganador);
+            // --- CORREGIDO: Ahora enviamos el ganador, la ronda actual y las rondas máximas ---
+            photonView.RPC(nameof(RPC_MostrarFinDeRonda), RpcTarget.All, ganador, rondaActual, maxRondas);
         }
     }
 
+    // --- CORREGIDO: Actualizamos los parámetros del RPC ---
     [PunRPC]
-    private void RPC_MostrarFinDeRonda(string ganador)
+    private void RPC_MostrarFinDeRonda(string ganador, int ronda, int maximasRondas)
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
         if (uiResultados != null)
         {
-            uiResultados.MostrarResultados(ganador);
+            uiResultados.MostrarResultados(ganador, ronda, maximasRondas);
         }
     }
 
@@ -203,12 +214,23 @@ public class Luncher : MonoBehaviourPunCallbacks
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         
-        LimpiarEscenario(); // NUEVO: Llamamos a la limpieza general
+        // --- NUEVO: Gestión de avance de ronda ---
+        if (rondaActual >= maxRondas)
+        {
+            rondaActual = 1; // Reseteamos la partida completa
+            ScoreManager.ReiniciarPuntosPartida(); // Ponemos los marcadores a 0
+        }
+        else
+        {
+            rondaActual++; // Sumamos una ronda más
+        }
+        // -----------------------------------------
+
+        LimpiarEscenario();
 
         SpawnearJugador();
     }
 
-    // NUEVO: Función para destruir todos los objetos residuales de la ronda anterior
     private void LimpiarEscenario()
     {
         // 1. Limpiar todas las trampas (cada jugador destruye las que él mismo lanzó)

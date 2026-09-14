@@ -51,6 +51,11 @@ MonoBehaviour:
   - RPC_ActualizarModeloArma
   - RPC_AplicarRalentizacion
   - RPC_ReproducirAnimacionMelee
+  - AsignarNombreDatosArma
+  - RPC_DestruirPickup
+  - RPC_EquiparArmaRed
+  - RPC_SolicitarDestruccion
+  - RPC_DesequiparArmaRed
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

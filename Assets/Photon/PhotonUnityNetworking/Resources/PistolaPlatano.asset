@@ -10,23 +10,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 15ee7857e77aa9f4394afb4749535399, type: 3}
-  m_Name: PescaoCongelao
+  m_Name: PistolaPlatano
   m_EditorClassIdentifier: Assembly-CSharp::DatosArma
-  nombreArma: PescaoCongelao
-  tipoArma: 1
+  nombreArma: Platano
+  tipoArma: 0
   cadenciaDisparo: 0.3
-  nombrePrefabModeloArma: Pescao
-  nombrePrefabProyectilNet: 
-  municionMaxima: 6
+  nombrePrefabModeloArma: Pistola
+  nombrePrefabProyectilNet: Bala
+  municionMaxima: 7
   velocidadProyectil: 20
   dano: 25
   efectoVacio: 1
-  nombrePrefabTrampaNet: 
+  nombrePrefabTrampaNet: Trampacascara
   danoMelee: 20
   rangoMelee: 2
   radioMelee: 1
   ralentizacionMultiplicador: 0.4
   ralentizacionDuracion: 2.5
-  anguloGolpeMelee: {x: 0, y: -90, z: 0}
-  duracionIdaGolpeMelee: 0.12
-  duracionVueltaGolpeMelee: 0.25
+  anguloGolpeMelee: {x: 0, y: 90, z: 0}
+  duracionIdaGolpeMelee: 0.08
+  duracionVueltaGolpeMelee: 0.12

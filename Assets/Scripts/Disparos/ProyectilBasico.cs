@@ -7,6 +7,11 @@ public class ProyectilBasico : MonoBehaviourPun
     public float dano = 25f;
     public float tiempoDeVida = 3f;
 
+    // --- NUEVO: Datos para la tabla de puntuación ---
+    public string titularMuerte = "¡Acribillado!";
+    public int puntosPorBaja = 75;
+    // ------------------------------------------------
+
     private bool yaImpacto = false;
 
     void Start()
@@ -42,7 +47,8 @@ public class ProyectilBasico : MonoBehaviourPun
             PlayerHealth saludEnemigo = other.GetComponentInParent<PlayerHealth>();
             if (saludEnemigo != null)
             {
-                saludEnemigo.photonView.RPC("RecibirDano", RpcTarget.All, dano);
+                // AHORA ENVIAMOS: Daño, ID del Dueño, Nombre del Arma y Puntos
+                saludEnemigo.photonView.RPC("RecibirDano", RpcTarget.All, dano, photonView.Owner.ActorNumber, titularMuerte, puntosPorBaja);
             }
 
             yaImpacto = true;
