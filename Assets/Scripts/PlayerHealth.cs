@@ -1,43 +1,78 @@
 using UnityEngine;
 using Photon.Pun;
-using Photon.Realtime; // Necesario para identificar a los jugadores por su ID
+using Photon.Realtime;
 
 public class PlayerHealth : MonoBehaviourPun
 {
     [Header("Estadísticas")]
     public float vidaMaxima = 100f;
-    private float vidaActual;
 
-    void Start()
+    private float vidaActual;
+    private bool haMuerto = false;
+
+    private void Start()
     {
         vidaActual = vidaMaxima;
     }
 
-    // Este atributo permite que la función se ejecute en todos los clientes conectados
     [PunRPC]
-    public void RecibirDano(float cantidad, int actorNumberAtacante, string nombreArma, int puntosPremio)
+    public void RecibirDano(
+        float cantidad,
+        int actorNumberAtacante,
+        string nombreArma,
+        int puntosPremio
+    )
     {
-        vidaActual -= cantidad;
-        Debug.Log($"El jugador {photonView.Owner.NickName} recibió {cantidad} de daño. Vida restante: {vidaActual}");
+        // Si ya ha muerto, ignoramos cualquier daño posterior.
+        if (haMuerto)
+            return;
 
-        if (vidaActual <= 0 && photonView.IsMine)
+        vidaActual -= cantidad;
+
+        Debug.Log(
+            $"El jugador {photonView.Owner.NickName} recibió {cantidad} de daño. Vida restante: {vidaActual}"
+        );
+
+        if (vidaActual <= 0f && photonView.IsMine)
         {
-            // Buscamos quién nos ha matado en la sala de Photon usando su ActorNumber
-            Player atacante = PhotonNetwork.CurrentRoom.GetPlayer(actorNumberAtacante);
+            haMuerto = true;
+
+            // Buscamos al atacante mediante ActorNumber
+            Player atacante = null;
+
+            if (PhotonNetwork.CurrentRoom != null)
+            {
+                atacante =
+                    PhotonNetwork.CurrentRoom.GetPlayer(
+                        actorNumberAtacante
+                    );
+            }
 
             if (atacante != null)
             {
                 if (atacante != photonView.Owner)
                 {
-                    // NOS MATÓ OTRO JUGADOR: Le damos sus puntos
-                    ScoreManager.SumarPuntos(atacante, puntosPremio);
-                    Debug.Log($"<color=green>¡{atacante.NickName} humilló a {photonView.Owner.NickName} con {nombreArma}! (+{puntosPremio} pts)</color>");
+                    // NOS MATÓ OTRO JUGADOR
+                    ScoreManager.SumarPuntos(
+                        atacante,
+                        puntosPremio
+                    );
+
+                    Debug.Log(
+                        $"<color=green>¡{atacante.NickName} humilló a {photonView.Owner.NickName} con {nombreArma}! (+{puntosPremio} pts)</color>"
+                    );
                 }
                 else
                 {
-                    // NOS MATAMOS NOSOTROS MISMOS (Auto-humillación)
-                    ScoreManager.SumarPuntos(photonView.Owner, 25);
-                    Debug.Log($"<color=red>¡AUTO-HUMILLACIÓN! {photonView.Owner.NickName} se eliminó a sí mismo. (+25 pts)</color>");
+                    // AUTO-HUMILLACIÓN
+                    ScoreManager.SumarPuntos(
+                        photonView.Owner,
+                        25
+                    );
+
+                    Debug.Log(
+                        $"<color=red>¡AUTO-HUMILLACIÓN! {photonView.Owner.NickName} se eliminó a sí mismo. (+25 pts)</color>"
+                    );
                 }
             }
 
@@ -47,16 +82,63 @@ public class PlayerHealth : MonoBehaviourPun
 
     private void Morir()
     {
-        if (photonView.IsMine)
-        {
-            // Avisamos al Luncher que hemos muerto pasándole nuestro PlayerController
-            if (Luncher.Instancia != null)
-            {
-                PlayerController controller = GetComponent<PlayerController>();
-                Luncher.Instancia.NotificarMuerteLocal(controller);
-            }
+        if (!photonView.IsMine)
+            return;
 
-            PhotonNetwork.Destroy(gameObject);
+        // =====================================================
+        // 1. ELIMINAR EL ARMA VISUAL EN TODOS LOS CLIENTES
+        // =====================================================
+
+        photonView.RPC(
+            nameof(RPC_LimpiarArmaAlMorir),
+            RpcTarget.All
+        );
+
+        // =====================================================
+        // 2. AVISAR AL LUNCHER
+        // =====================================================
+
+        if (Luncher.Instancia != null)
+        {
+            PlayerController controller =
+                GetComponent<PlayerController>();
+
+            Luncher.Instancia.NotificarMuerteLocal(
+                controller
+            );
         }
+
+        // =====================================================
+        // 3. DESTRUIR AL JUGADOR
+        // =====================================================
+
+        PhotonNetwork.Destroy(gameObject);
+    }
+
+    [PunRPC]
+    private void RPC_LimpiarArmaAlMorir()
+    {
+        // Buscamos el PlayerShooter que pertenece
+        // a este mismo PlayerHealth.
+        PlayerShooter shooter =
+            GetComponent<PlayerShooter>();
+
+        if (shooter != null)
+        {
+            // Elimina explícitamente:
+            // - modelo del arma
+            // - punto de disparo
+            // - munición
+            // - datos del arma
+            // - animación melee
+            shooter.LimpiarArmaVisualLocal();
+        }
+
+        // Seguridad adicional:
+        // aunque el arma ya no exista, dejamos claro
+        // que no debe quedar ninguna referencia.
+        transform.GetComponentsInChildren<Transform>(
+            true
+        );
     }
 }

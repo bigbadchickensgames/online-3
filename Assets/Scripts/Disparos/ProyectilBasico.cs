@@ -3,86 +3,97 @@ using Photon.Pun;
 
 public class ProyectilBasico : MonoBehaviourPun
 {
-    public float velocidad = 25f;
-    public float dano = 25f;
-    public float tiempoDeVida = 3f;
+    [Header("Configuración del Proyectil")]
+    public float velocidad = 20f;
+    public int dano = 10;
+    public string titularMuerte = "Jugador";
+    public int puntosPorBaja = 100;
+    public float tiempoVida = 5f;
 
-    // --- NUEVO: Datos para la tabla de puntuación ---
-    public string titularMuerte = "¡Acribillado!";
-    public int puntosPorBaja = 75;
-    // ------------------------------------------------
+    [HideInInspector]
+    public int duenoActorNumber = -1;
 
-    private bool yaImpacto = false;
+    private Rigidbody rb;
 
-    void Start()
+    private void Awake()
     {
-        if (photonView.IsMine)
+        rb = GetComponent<Rigidbody>();
+    }
+
+    private void Start()
+    {
+        if (photonView != null && photonView.Owner != null)
         {
-            Invoke(nameof(DestruirBala), tiempoDeVida);
+            duenoActorNumber = photonView.Owner.ActorNumber;
+        }
+
+        Destroy(gameObject, tiempoVida);
+
+        IniciarMovimiento();
+    }
+
+    private void IniciarMovimiento()
+    {
+        if (rb != null)
+        {
+            rb.velocity = transform.forward * velocidad;
         }
     }
 
-    void Update()
+    private void Update()
     {
-        if (yaImpacto) return;
-
-        transform.Translate(Vector3.forward * velocidad * Time.deltaTime);
+        // Si no utiliza Rigidbody, avanzar mediante la transformación directa
+        if (rb == null)
+        {
+            transform.Translate(Vector3.forward * velocidad * Time.deltaTime);
+        }
     }
 
-    void OnTriggerEnter(Collider other)
+    [PunRPC]
+    public void RedirigirProyectil(Vector3 nuevaDireccion, int nuevoDuenoActorNumber)
     {
-        if (yaImpacto) return;
+        duenoActorNumber = nuevoDuenoActorNumber;
+
+        if (nuevaDireccion != Vector3.zero)
+        {
+            transform.rotation = Quaternion.LookRotation(nuevaDireccion);
+        }
+
+        if (rb != null)
+        {
+            rb.velocity = nuevaDireccion.normalized * velocidad;
+        }
+
+        Debug.Log($"<color=cyan>[PROYECTIL] Redirigido correctamente por el jugador con ActorNumber: {nuevoDuenoActorNumber}</color>");
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        // Solo la instancia local o el cliente Master procesan el impacto para evitar ejecuciones duplicadas
+        if (!PhotonNetwork.IsMasterClient && !photonView.IsMine)
+            return;
 
         PhotonView pvImpactado = other.GetComponentInParent<PhotonView>();
 
-        // Ignorar colisión con la persona que disparó la bala
-        if (pvImpactado != null && pvImpactado.Owner == photonView.Owner)
+        // Evitar que la bala golpee a su dueño actual
+        if (pvImpactado != null && pvImpactado.Owner != null && pvImpactado.Owner.ActorNumber == duenoActorNumber)
         {
             return;
         }
 
-        // SI YO SOY EL QUE DISPARÓ: Aplico daño y destruyo la bala en la red
+        PlayerHealth salud = other.GetComponentInParent<PlayerHealth>();
+        if (salud != null)
+        {
+            salud.photonView.RPC("RecibirDano", RpcTarget.All, dano, duenoActorNumber, titularMuerte, puntosPorBaja);
+        }
+
         if (photonView.IsMine)
         {
-            PlayerHealth saludEnemigo = other.GetComponentInParent<PlayerHealth>();
-            if (saludEnemigo != null)
-            {
-                // AHORA ENVIAMOS: Daño, ID del Dueño, Nombre del Arma y Puntos
-                saludEnemigo.photonView.RPC("RecibirDano", RpcTarget.All, dano, photonView.Owner.ActorNumber, titularMuerte, puntosPorBaja);
-            }
-
-            yaImpacto = true;
-            DestruirBala();
+            PhotonNetwork.Destroy(gameObject);
         }
-        // SI YO SOY EL QUE RECIBE EL DISPARO: La oculto al instante en mi pantalla para que no atraviese mi cuerpo
         else
         {
-            if (pvImpactado != null && pvImpactado.IsMine)
-            {
-                yaImpacto = true;
-                OcultarBalaLocalmente();
-            }
+            Destroy(gameObject);
         }
-    }
-
-    private void OcultarBalaLocalmente()
-    {
-        // Ocultamos todos los gráficos de la bala de inmediato
-        Renderer[] renderers = GetComponentsInChildren<Renderer>();
-        foreach (Renderer r in renderers)
-        {
-            r.enabled = false;
-        }
-
-        Collider col = GetComponent<Collider>();
-        if (col != null)
-        {
-            col.enabled = false;
-        }
-    }
-
-    private void DestruirBala()
-    {
-        PhotonNetwork.Destroy(gameObject);
     }
 }

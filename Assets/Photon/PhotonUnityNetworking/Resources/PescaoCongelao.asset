@@ -15,6 +15,8 @@ MonoBehaviour:
   nombreArma: PescaoCongelao
   tipoArma: 1
   cadenciaDisparo: 0.3
+  puntosPorBaja: 75
+  titularMuerte: "\xA1Acribillado!"
   nombrePrefabModeloArma: Pescao
   nombrePrefabProyectilNet: 
   municionMaxima: 6
@@ -27,6 +29,8 @@ MonoBehaviour:
   radioMelee: 0.75
   ralentizacionMultiplicador: 0.4
   ralentizacionDuracion: 2.5
+  puedeDevolverProyectiles: 1
+  radioDesvio: 1.5
   anguloGolpeMelee: {x: 0, y: -90, z: 0}
   duracionIdaGolpeMelee: 0.12
   duracionVueltaGolpeMelee: 0.25

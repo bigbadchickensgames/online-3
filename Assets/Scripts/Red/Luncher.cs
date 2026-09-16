@@ -4,7 +4,7 @@ using Photon.Realtime;
 using System.Collections;
 using System.Collections.Generic;
 using ExitGames.Client.Photon;
-using Hashtable = ExitGames.Client.Photon.Hashtable; // Alias para resolver la ambigüedad
+using Hashtable = ExitGames.Client.Photon.Hashtable;
 
 public class Luncher : MonoBehaviourPunCallbacks
 {
@@ -17,68 +17,122 @@ public class Luncher : MonoBehaviourPunCallbacks
     [Header("UI de Transición / Fin de Ronda")]
     public UIResultadosController uiResultados;
 
-    // --- NUEVO: SISTEMA DE RONDAS ---
     [Header("Configuración de Partida")]
     public int rondaActual = 1;
     public int maxRondas = 5;
-    // --------------------------------
 
     private GameObject jugadorLocalActual;
     private int jugadoresVivos = 0;
 
     private void Awake()
     {
-        if (Instancia == null) Instancia = this;
-        else Destroy(gameObject);
+        if (Instancia == null)
+        {
+            Instancia = this;
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
     private void Start()
     {
         if (uiResultados == null)
         {
-            uiResultados = FindFirstObjectByType<UIResultadosController>();
+            uiResultados =
+                FindFirstObjectByType<UIResultadosController>();
+
             if (uiResultados == null)
             {
-                GameObject go = new GameObject("UIResultadosController");
-                uiResultados = go.AddComponent<UIResultadosController>();
+                GameObject go =
+                    new GameObject(
+                        "UIResultadosController"
+                    );
+
+                uiResultados =
+                    go.AddComponent<UIResultadosController>();
             }
         }
 
-        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom)
+        if (
+            PhotonNetwork.IsConnectedAndReady &&
+            PhotonNetwork.InRoom
+        )
         {
             EstablecerEstadoListoLocal(false);
             SpawnearJugador();
         }
     }
 
+    // =========================================================
+    // SPAWN
+    // =========================================================
+
     public void SpawnearJugador()
     {
+        // Antes de destruir el jugador viejo,
+        // eliminamos explícitamente su arma visual.
         if (jugadorLocalActual != null)
         {
+            PlayerShooter shooter =
+                jugadorLocalActual.GetComponent<PlayerShooter>();
+
+            if (shooter != null)
+            {
+                shooter.LimpiarArmaVisualLocal();
+            }
+
             PhotonNetwork.Destroy(jugadorLocalActual);
+            jugadorLocalActual = null;
         }
 
         if (prefab == null)
         {
-            Debug.LogError("Error: No has asignado el prefab en el Inspector del script Luncher.");
+            Debug.LogError(
+                "Error: No has asignado el prefab en el Inspector del script Luncher."
+            );
+
             return;
         }
 
         Vector3 pos = Vector3.zero;
         Quaternion rot = Quaternion.identity;
 
-        if (puntosDeSpawn != null && puntosDeSpawn.Length > 0)
+        if (
+            puntosDeSpawn != null &&
+            puntosDeSpawn.Length > 0
+        )
         {
-            int indice = Random.Range(0, puntosDeSpawn.Length);
-            pos = puntosDeSpawn[indice].position;
-            rot = puntosDeSpawn[indice].rotation;
+            int indice =
+                Random.Range(
+                    0,
+                    puntosDeSpawn.Length
+                );
+
+            pos =
+                puntosDeSpawn[indice].position;
+
+            rot =
+                puntosDeSpawn[indice].rotation;
         }
 
-        jugadorLocalActual = PhotonNetwork.Instantiate(prefab.name, pos, rot);
+        jugadorLocalActual =
+            PhotonNetwork.Instantiate(
+                prefab.name,
+                pos,
+                rot
+            );
 
-        if (uiResultados != null) uiResultados.Ocultar();
+        if (uiResultados != null)
+        {
+            uiResultados.Ocultar();
+        }
 
-        photonView.RPC(nameof(RPC_NotificarSpawn), RpcTarget.MasterClient);
+        photonView.RPC(
+            nameof(RPC_NotificarSpawn),
+            RpcTarget.MasterClient
+        );
     }
 
     [PunRPC]
@@ -90,18 +144,36 @@ public class Luncher : MonoBehaviourPunCallbacks
         }
     }
 
-    public void NotificarMuerteLocal(PlayerController jugadorQueMurio)
+    // =========================================================
+    // MUERTE
+    // =========================================================
+
+    public void NotificarMuerteLocal(
+        PlayerController jugadorQueMurio
+    )
     {
         ActivarModoEspectador();
-        photonView.RPC(nameof(RPC_RegistrarMuerte), RpcTarget.MasterClient, PhotonNetwork.LocalPlayer.NickName);
+
+        photonView.RPC(
+            nameof(RPC_RegistrarMuerte),
+            RpcTarget.MasterClient,
+            PhotonNetwork.LocalPlayer.NickName
+        );
     }
 
     private void ActivarModoEspectador()
     {
-        PlayerController[] todosLosJugadores = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
+        PlayerController[] todosLosJugadores =
+            FindObjectsByType<PlayerController>(
+                FindObjectsSortMode.None
+            );
+
         foreach (var p in todosLosJugadores)
         {
-            if (!p.photonView.IsMine && p.EstaVivo)
+            if (
+                !p.photonView.IsMine &&
+                p.EstaVivo
+            )
             {
                 p.EnfocarCamaraEspectador();
                 break;
@@ -110,9 +182,12 @@ public class Luncher : MonoBehaviourPunCallbacks
     }
 
     [PunRPC]
-    private void RPC_RegistrarMuerte(string nombreMuerto)
+    private void RPC_RegistrarMuerte(
+        string nombreMuerto
+    )
     {
-        if (!PhotonNetwork.IsMasterClient) return;
+        if (!PhotonNetwork.IsMasterClient)
+            return;
 
         jugadoresVivos--;
 
@@ -120,61 +195,119 @@ public class Luncher : MonoBehaviourPunCallbacks
         {
             string ganador = "¡Empate!";
 
-            PlayerController[] jugadores = FindObjectsByType<PlayerController>(FindObjectsSortMode.None);
+            PlayerController[] jugadores =
+                FindObjectsByType<PlayerController>(
+                    FindObjectsSortMode.None
+                );
+
             foreach (var p in jugadores)
             {
                 if (p.EstaVivo)
                 {
-                    ganador = p.photonView.Owner.NickName;
-                    
-                    // Opcional: Le damos unos puntitos extra por ser el último en pie
-                    ScoreManager.SumarPuntos(p.photonView.Owner, 150); 
+                    ganador =
+                        p.photonView.Owner.NickName;
+
+                    ScoreManager.SumarPuntos(
+                        p.photonView.Owner,
+                        150
+                    );
+
                     break;
                 }
             }
 
-            // --- CORREGIDO: Ahora enviamos el ganador, la ronda actual y las rondas máximas ---
-            photonView.RPC(nameof(RPC_MostrarFinDeRonda), RpcTarget.All, ganador, rondaActual, maxRondas);
+            photonView.RPC(
+                nameof(RPC_MostrarFinDeRonda),
+                RpcTarget.All,
+                ganador,
+                rondaActual,
+                maxRondas
+            );
         }
     }
 
-    // --- CORREGIDO: Actualizamos los parámetros del RPC ---
+    // =========================================================
+    // FIN DE RONDA
+    // =========================================================
+
     [PunRPC]
-    private void RPC_MostrarFinDeRonda(string ganador, int ronda, int maximasRondas)
+    private void RPC_MostrarFinDeRonda(
+        string ganador,
+        int ronda,
+        int maximasRondas
+    )
     {
-        Cursor.lockState = CursorLockMode.None;
+        Cursor.lockState =
+            CursorLockMode.None;
+
         Cursor.visible = true;
 
         if (uiResultados != null)
         {
-            uiResultados.MostrarResultados(ganador, ronda, maximasRondas);
+            uiResultados.MostrarResultados(
+                ganador,
+                ronda,
+                maximasRondas
+            );
         }
     }
+
+    // =========================================================
+    // READY
+    // =========================================================
 
     public void ToggleEstadoListoLocal()
     {
         bool estadoActual = false;
-        if (PhotonNetwork.LocalPlayer.CustomProperties.TryGetValue("IsReady", out object isReady))
+
+        if (
+            PhotonNetwork.LocalPlayer.CustomProperties
+                .TryGetValue(
+                    "IsReady",
+                    out object isReady
+                )
+        )
         {
             estadoActual = (bool)isReady;
         }
 
-        EstablecerEstadoListoLocal(!estadoActual);
+        EstablecerEstadoListoLocal(
+            !estadoActual
+        );
     }
 
-    private void EstablecerEstadoListoLocal(bool estado)
+    private void EstablecerEstadoListoLocal(
+        bool estado
+    )
     {
-        Hashtable props = new Hashtable { { "IsReady", estado } };
-        PhotonNetwork.LocalPlayer.SetCustomProperties(props);
+        Hashtable props =
+            new Hashtable
+            {
+                {
+                    "IsReady",
+                    estado
+                }
+            };
+
+        PhotonNetwork.LocalPlayer
+            .SetCustomProperties(props);
     }
 
-    public override void OnPlayerPropertiesUpdate(Player targetPlayer, Hashtable changedProps)
+    public override void OnPlayerPropertiesUpdate(
+        Player targetPlayer,
+        Hashtable changedProps
+    )
     {
-        if (changedProps.ContainsKey("IsReady"))
+        if (
+            changedProps.ContainsKey(
+                "IsReady"
+            )
+        )
         {
             if (uiResultados != null)
             {
-                uiResultados.ActualizarEstadoJugadores();
+                uiResultados
+                    .ActualizarEstadoJugadores();
             }
 
             ComprobarTodosListos();
@@ -183,11 +316,21 @@ public class Luncher : MonoBehaviourPunCallbacks
 
     private void ComprobarTodosListos()
     {
-        if (!PhotonNetwork.IsMasterClient) return;
+        if (!PhotonNetwork.IsMasterClient)
+            return;
 
-        foreach (Player p in PhotonNetwork.PlayerList)
+        foreach (
+            Player p
+            in PhotonNetwork.PlayerList
+        )
         {
-            if (!p.CustomProperties.TryGetValue("IsReady", out object isReady) || !(bool)isReady)
+            if (
+                !p.CustomProperties.TryGetValue(
+                    "IsReady",
+                    out object isReady
+                ) ||
+                !(bool)isReady
+            )
             {
                 return;
             }
@@ -198,58 +341,188 @@ public class Luncher : MonoBehaviourPunCallbacks
 
     private void ResetearEstadosListoYReiniciar()
     {
-        foreach (Player p in PhotonNetwork.PlayerList)
+        foreach (
+            Player p
+            in PhotonNetwork.PlayerList
+        )
         {
-            Hashtable props = new Hashtable { { "IsReady", false } };
+            Hashtable props =
+                new Hashtable
+                {
+                    {
+                        "IsReady",
+                        false
+                    }
+                };
+
             p.SetCustomProperties(props);
         }
 
         jugadoresVivos = 0;
-        photonView.RPC(nameof(RPC_ReiniciarRonda), RpcTarget.All);
+
+        photonView.RPC(
+            nameof(RPC_ReiniciarRonda),
+            RpcTarget.All
+        );
     }
+
+    // =========================================================
+    // REINICIAR RONDA
+    // =========================================================
 
     [PunRPC]
     private void RPC_ReiniciarRonda()
     {
-        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.lockState =
+            CursorLockMode.Locked;
+
         Cursor.visible = false;
-        
-        // --- NUEVO: Gestión de avance de ronda ---
+
+        // -----------------------------------------------------
+        // AVANCE DE RONDA
+        // -----------------------------------------------------
+
         if (rondaActual >= maxRondas)
         {
-            rondaActual = 1; // Reseteamos la partida completa
-            ScoreManager.ReiniciarPuntosPartida(); // Ponemos los marcadores a 0
+            rondaActual = 1;
+
+            ScoreManager.ReiniciarPuntosPartida();
         }
         else
         {
-            rondaActual++; // Sumamos una ronda más
+            rondaActual++;
         }
-        // -----------------------------------------
+
+        // -----------------------------------------------------
+        // LIMPIEZA COMPLETA
+        // -----------------------------------------------------
 
         LimpiarEscenario();
+
+        // -----------------------------------------------------
+        // CREAR JUGADOR NUEVO
+        // -----------------------------------------------------
 
         SpawnearJugador();
     }
 
+    // =========================================================
+    // LIMPIEZA COMPLETA
+    // =========================================================
+
     private void LimpiarEscenario()
     {
-        // 1. Limpiar todas las trampas (cada jugador destruye las que él mismo lanzó)
-        TrampaPlatano[] trampas = FindObjectsByType<TrampaPlatano>(FindObjectsSortMode.None);
-        foreach (TrampaPlatano trampa in trampas)
+        // =====================================================
+        // 1. ELIMINAR MODELOS DE ARMAS EQUIPADAS
+        // =====================================================
+        //
+        // IMPORTANTE:
+        // Los modelos equipados son Instantiate normal,
+        // no PhotonNetwork.Instantiate.
+        //
+        // Por eso TODOS los clientes deben destruirlos
+        // localmente.
+        // =====================================================
+
+        PlayerShooter[] shooters =
+            FindObjectsByType<PlayerShooter>(
+                FindObjectsSortMode.None
+            );
+
+        foreach (PlayerShooter shooter in shooters)
         {
-            if (trampa.photonView.IsMine)
+            shooter.LimpiarArmaVisualLocal();
+        }
+
+        // =====================================================
+        // 2. ELIMINAR PICKUPS DE ARMAS
+        // =====================================================
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            PickupArma[] armasSueltas =
+                FindObjectsByType<PickupArma>(
+                    FindObjectsSortMode.None
+                );
+
+            foreach (PickupArma arma in armasSueltas)
             {
-                PhotonNetwork.Destroy(trampa.gameObject);
+                if (
+                    arma != null &&
+                    arma.photonView != null &&
+                    arma.photonView.IsSceneView == false
+                )
+                {
+                    PhotonNetwork.Destroy(
+                        arma.gameObject
+                    );
+                }
             }
         }
 
-        // 2. Por si acaso hay balas volando en el momento que termina la ronda, las limpiamos también
-        ProyectilBasico[] balas = FindObjectsByType<ProyectilBasico>(FindObjectsSortMode.None);
+        // =====================================================
+        // 3. ELIMINAR TRAMPAS
+        // =====================================================
+
+        TrampaPlatano[] trampas =
+            FindObjectsByType<TrampaPlatano>(
+                FindObjectsSortMode.None
+            );
+
+        foreach (TrampaPlatano trampa in trampas)
+        {
+            if (
+                trampa != null &&
+                trampa.photonView != null &&
+                trampa.photonView.IsMine
+            )
+            {
+                PhotonNetwork.Destroy(
+                    trampa.gameObject
+                );
+            }
+        }
+
+        // =====================================================
+        // 4. ELIMINAR PROYECTILES
+        // =====================================================
+
+        ProyectilBasico[] balas =
+            FindObjectsByType<ProyectilBasico>(
+                FindObjectsSortMode.None
+            );
+
         foreach (ProyectilBasico bala in balas)
         {
-            if (bala.photonView.IsMine)
+            if (
+                bala != null &&
+                bala.photonView != null &&
+                bala.photonView.IsMine
+            )
             {
-                PhotonNetwork.Destroy(bala.gameObject);
+                PhotonNetwork.Destroy(
+                    bala.gameObject
+                );
+            }
+        }
+
+        // =====================================================
+        // 5. REINICIAR GENERADORES DE ARMAS
+        // =====================================================
+
+        if (PhotonNetwork.IsMasterClient)
+        {
+            GeneradorArmas[] generadores =
+                FindObjectsByType<GeneradorArmas>(
+                    FindObjectsSortMode.None
+                );
+
+            foreach (
+                GeneradorArmas generador
+                in generadores
+            )
+            {
+                generador.ReiniciarGenerador();
             }
         }
     }

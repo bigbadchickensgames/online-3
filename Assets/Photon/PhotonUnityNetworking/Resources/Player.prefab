@@ -157,9 +157,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b97a98de8b8e7a04386f96b73902dfcf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  velocidad: 5
+  velocidad: 6.5
   velocidadRotacion: 15
-  alturaSalto: 1.5
+  alturaSalto: 1.75
   multiplicadorCaida: 2
   multiplicadorSubida: 2
   distanciaCheckSuelo: 0.3

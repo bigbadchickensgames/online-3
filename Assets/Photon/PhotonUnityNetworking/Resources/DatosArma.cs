@@ -11,11 +11,9 @@ public class DatosArma : ScriptableObject
     public TipoArma tipoArma = TipoArma.Disparo;
     public float cadenciaDisparo = 0.3f;
 
-    // --- NUEVO: PUNTUACIÓN Y RISAS ---
     [Header("Humillación (Puntos)")]
-    public int puntosPorBaja = 75; // 75 pistola, 150 pescado
-    public string titularMuerte = "¡Acribillado!"; // Ej: "¡BOFETÓN MARINO!" o "¡Baleado!"
-    // ---------------------------------
+    public int puntosPorBaja = 75; 
+    public string titularMuerte = "¡Acribillado!"; 
 
     [Header("Modelo Visual (nombre exacto del prefab en una carpeta Resources)")]
     public string nombrePrefabModeloArma;
@@ -36,6 +34,11 @@ public class DatosArma : ScriptableObject
     public float radioMelee = 1f;
     public float ralentizacionMultiplicador = 0.4f; 
     public float ralentizacionDuracion = 2.5f;
+
+    // --- NUEVO: Defensa de Melee (Devolver Proyectiles) ---
+    [Header("Defensa de Melee (Devolver Proyectiles)")]
+    public bool puedeDevolverProyectiles = false; 
+    public float radioDesvio = 2.5f;
 
     [Header("Animación de Golpe Melee (si tipoArma = Melee)")]
     public Vector3 anguloGolpeMelee = new Vector3(0f, 90f, 0f); 

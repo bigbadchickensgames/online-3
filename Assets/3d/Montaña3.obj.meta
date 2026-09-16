@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 0dbfd71960e94c7489c689414a7129ab
+guid: 3fe9ae2ab4df69c4ab784aad764bcb44
 ModelImporter:
   serializedVersion: 24600
   internalIDToNameTable: []
@@ -23,7 +23,7 @@ ModelImporter:
     animationDoRetargetingWarnings: 0
     importAnimatedCustomProperties: 0
     importConstraints: 0
-    animationCompression: 3
+    animationCompression: 1
     animationRotationError: 0.5
     animationPositionError: 0.5
     animationScaleError: 0.5
@@ -89,32 +89,7 @@ ModelImporter:
   humanDescription:
     serializedVersion: 3
     human: []
-    skeleton:
-    - name: Player_v1(Clone)
-      parentName: 
-      position: {x: -0.62687415, y: 7.4138975, z: -0.5262368}
-      rotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
-      scale: {x: 100, y: 100, z: 100}
-    - name: Cabeza.001
-      parentName: Player_v1(Clone)
-      position: {x: 0.00836432, y: -0.0021177041, z: -0.003831949}
-      rotation: {x: 0, y: -0, z: -0, w: 1}
-      scale: {x: 1.176979, y: 1.176979, z: 1.176979}
-    - name: Cuerpo.001
-      parentName: Player_v1(Clone)
-      position: {x: 0.008364322, y: -0.0021177041, z: -0.038709182}
-      rotation: {x: 1, y: 0, z: 0, w: -0.0000000754979}
-      scale: {x: -1.283457, y: -0.801362, z: -0.71577734}
-    - name: Manos.001
-      parentName: Player_v1(Clone)
-      position: {x: -0.002350164, y: -0.0021177041, z: -0.036726195}
-      rotation: {x: 6.1232336e-17, y: 1, z: -6.1232336e-17, w: -0.00000004371139}
-      scale: {x: -0.60971296, y: -0.3003232, z: -0.60971296}
-    - name: Pies.001
-      parentName: Player_v1(Clone)
-      position: {x: 0.0037376424, y: -0.0021177041, z: -0.06577112}
-      rotation: {x: 0, y: -0, z: -0, w: 1}
-      scale: {x: 0.58737373, y: 0.6364571, z: 0.58737373}
+    skeleton: []
     armTwist: 0.5
     foreArmTwist: 0.5
     upperLegTwist: 0.5
@@ -129,7 +104,7 @@ ModelImporter:
     skeletonHasParents: 1
   lastHumanDescriptionAvatarSource: {instanceID: 0}
   autoGenerateAvatarMappingIfUnspecified: 1
-  animationType: 0
+  animationType: 2
   humanoidOversampling: 1
   avatarSetup: 0
   addHumanoidExtraRootOnlyWhenUsingAvatar: 1
