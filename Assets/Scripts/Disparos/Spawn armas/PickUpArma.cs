@@ -12,13 +12,48 @@ public class PickupArma :
     public float velocidadRotacion = 60f;
     public float velocidadFlote = 2.5f;
     public float amplitudFlote = 0.15f;
+
+    [Tooltip("Altura a la que flota POR ENCIMA del punto de spawn. Súbelo si el arma queda enterrada en el suelo o dentro de la base.")]
     public float offsetAltura = 0.8f;
 
+    [Tooltip("Opcional: objeto hijo que gira. Si se deja vacío, gira el objeto raíz (comportamiento del resto de armas).")]
+    public Transform modeloVisual;
+
     private Vector3 posicionInicial;
+    private bool estaEquipado = false;
+
+    private void Awake()
+    {
+        // Un arma que además sirve de proyectil puede traer Rigidbody.
+        // Si tiene gravedad, se hunde en el suelo y la física pisa el flote.
+        Rigidbody cuerpo = GetComponent<Rigidbody>();
+
+        if (cuerpo != null)
+        {
+            cuerpo.velocity = Vector3.zero;
+            cuerpo.angularVelocity = Vector3.zero;
+            cuerpo.useGravity = false;
+            cuerpo.isKinematic = true;
+        }
+    }
 
     private void Start()
     {
         posicionInicial = transform.position;
+
+        ActualizarEstadoEquipado();
+
+        // Colocamos el arma a su altura de flote de inmediato,
+        // para que no aparezca un frame metida en el suelo.
+        if (!estaEquipado)
+        {
+            transform.position =
+                new Vector3(
+                    posicionInicial.x,
+                    posicionInicial.y + offsetAltura,
+                    posicionInicial.z
+                );
+        }
 
         // Si no tiene datos asignados desde Inspector
         // ni desde InstantiationData, resolver por nombre.
@@ -31,6 +66,22 @@ public class PickupArma :
 
             CargarDatosArma(nombreLimpio);
         }
+    }
+
+    // Unity llama a esto automáticamente al cambiar de padre.
+    // Así no hay que preguntar por el padre en cada frame.
+    private void OnTransformParentChanged()
+    {
+        ActualizarEstadoEquipado();
+    }
+
+    private void ActualizarEstadoEquipado()
+    {
+        // Solo se considera "equipado" si cuelga de un jugador.
+        // Estar dentro de un punto de spawn NO cuenta,
+        // así que el arma sigue girando y flotando en la base.
+        estaEquipado =
+            GetComponentInParent<PlayerShooter>() != null;
     }
 
     public void OnPhotonInstantiate(
@@ -82,12 +133,15 @@ public class PickupArma :
 
     private void Update()
     {
-        // Si está equipado como hijo del jugador,
-        // no debe rotar/flotar.
-        if (transform.parent != null)
+        // Si está equipado en la mano de un jugador,
+        // no debe rotar ni flotar.
+        if (estaEquipado)
             return;
 
-        transform.Rotate(
+        Transform objetivoDeGiro =
+            modeloVisual != null ? modeloVisual : transform;
+
+        objetivoDeGiro.Rotate(
             Vector3.up *
             velocidadRotacion *
             Time.deltaTime,

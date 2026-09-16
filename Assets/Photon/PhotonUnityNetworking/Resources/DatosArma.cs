@@ -24,6 +24,9 @@ public class DatosArma : ScriptableObject
     public float velocidadProyectil = 20f;
     public float dano = 25f;
 
+    [Tooltip("Si está activo, el arma NO se desequipa al llegar a 0 munición (se queda en la mano) y recupera munición sola cuando el proyectil vuelve al jugador. Pensado para el boomerang.")]
+    public bool esBoomerang = false;
+
     [Header("Efecto al Vaciarse (si tipoArma = Disparo)")]
     public TipoEfectoVacio efectoVacio = TipoEfectoVacio.TirarComoTrampa;
     public string nombrePrefabTrampaNet; 
@@ -35,7 +38,7 @@ public class DatosArma : ScriptableObject
     public float ralentizacionMultiplicador = 0.4f; 
     public float ralentizacionDuracion = 2.5f;
 
-    // --- NUEVO: Defensa de Melee (Devolver Proyectiles) ---
+    // --- Defensa de Melee (Devolver Proyectiles) ---
     [Header("Defensa de Melee (Devolver Proyectiles)")]
     public bool puedeDevolverProyectiles = false; 
     public float radioDesvio = 2.5f;

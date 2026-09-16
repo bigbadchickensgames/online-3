@@ -239,7 +239,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 174398b09f49d3e49b82db54aeedb0ec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShooter
-  armaActual: {fileID: 11400000, guid: f60e9e08fd066aa40a3096c2c0e5e510, type: 2}
+  armaActual: {fileID: 11400000, guid: c43664a1678fde84c96b59725ec4a4cf, type: 2}
   puntoDeDisparo: {fileID: 0}
   socketArma: {fileID: 8337280459373957368}
   fuerzaLanzamientoTrampa: 15

@@ -58,6 +58,7 @@ MonoBehaviour:
   - RPC_DesequiparArmaRed
   - RPC_LimpiarArmaAlMorir
   - RedirigirProyectil
+  - RPC_RecuperarMunicionBoomerang
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

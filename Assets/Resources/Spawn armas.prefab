@@ -46,8 +46,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GeneradorArmas
   armasPosibles:
-  - {fileID: 11400000, guid: f60e9e08fd066aa40a3096c2c0e5e510, type: 2}
+  - {fileID: 11400000, guid: c43664a1678fde84c96b59725ec4a4cf, type: 2}
   - {fileID: 11400000, guid: e24e9ea5e9386b94bab6ad0b459d40fa, type: 2}
+  - {fileID: 11400000, guid: f60e9e08fd066aa40a3096c2c0e5e510, type: 2}
   tiempoReaparicion: 10
 --- !u!1 &4833556278517437271
 GameObject:

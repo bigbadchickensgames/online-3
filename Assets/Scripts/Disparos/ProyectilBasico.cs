@@ -13,14 +13,14 @@ public class ProyectilBasico : MonoBehaviourPun
     [HideInInspector]
     public int duenoActorNumber = -1;
 
-    private Rigidbody rb;
+    protected Rigidbody rb;
 
-    private void Awake()
+    protected virtual void Awake()
     {
         rb = GetComponent<Rigidbody>();
     }
 
-    private void Start()
+    protected virtual void Start()
     {
         if (photonView != null && photonView.Owner != null)
         {
@@ -32,7 +32,7 @@ public class ProyectilBasico : MonoBehaviourPun
         IniciarMovimiento();
     }
 
-    private void IniciarMovimiento()
+    protected virtual void IniciarMovimiento()
     {
         if (rb != null)
         {
@@ -40,9 +40,8 @@ public class ProyectilBasico : MonoBehaviourPun
         }
     }
 
-    private void Update()
+    protected virtual void Update()
     {
-        // Si no utiliza Rigidbody, avanzar mediante la transformación directa
         if (rb == null)
         {
             transform.Translate(Vector3.forward * velocidad * Time.deltaTime);
@@ -50,7 +49,7 @@ public class ProyectilBasico : MonoBehaviourPun
     }
 
     [PunRPC]
-    public void RedirigirProyectil(Vector3 nuevaDireccion, int nuevoDuenoActorNumber)
+    public virtual void RedirigirProyectil(Vector3 nuevaDireccion, int nuevoDuenoActorNumber)
     {
         duenoActorNumber = nuevoDuenoActorNumber;
 
@@ -67,9 +66,8 @@ public class ProyectilBasico : MonoBehaviourPun
         Debug.Log($"<color=cyan>[PROYECTIL] Redirigido correctamente por el jugador con ActorNumber: {nuevoDuenoActorNumber}</color>");
     }
 
-    private void OnTriggerEnter(Collider other)
+    protected virtual void OnTriggerEnter(Collider other)
     {
-        // Solo la instancia local o el cliente Master procesan el impacto para evitar ejecuciones duplicadas
         if (!PhotonNetwork.IsMasterClient && !photonView.IsMine)
             return;
 
@@ -87,6 +85,11 @@ public class ProyectilBasico : MonoBehaviourPun
             salud.photonView.RPC("RecibirDano", RpcTarget.All, dano, duenoActorNumber, titularMuerte, puntosPorBaja);
         }
 
+        DestruirProyectil();
+    }
+
+    protected virtual void DestruirProyectil()
+    {
         if (photonView.IsMine)
         {
             PhotonNetwork.Destroy(gameObject);
