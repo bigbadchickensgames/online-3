@@ -15,9 +15,29 @@ public class PlayerHealth : MonoBehaviourPun
         vidaActual = vidaMaxima;
     }
 
+    // NUEVO: muerte por caer al vacío. Sin puntos.
+    // Comparte el flag haMuerto con RecibirDano, así que
+    // nunca se registra la muerte dos veces.
+    public void MatarPorVacio()
+    {
+        if (!photonView.IsMine)
+            return;
+
+        if (haMuerto)
+            return;
+
+        haMuerto = true;
+
+        Debug.Log(
+            $"<color=orange>{photonView.Owner.NickName} cayó al vacío.</color>"
+        );
+
+        Morir();
+    }
+
     [PunRPC]
     public void RecibirDano(
-        float cantidad,
+        int cantidad,
         int actorNumberAtacante,
         string nombreArma,
         int puntosPremio
@@ -28,6 +48,7 @@ public class PlayerHealth : MonoBehaviourPun
             return;
 
         vidaActual -= cantidad;
+        GetComponent<GameJuicePlayer>()?.HacerFlash();
 
         Debug.Log(
             $"El jugador {photonView.Owner.NickName} recibió {cantidad} de daño. Vida restante: {vidaActual}"

@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 1702599344477240714}
   - component: {fileID: 157169388854128542}
   - component: {fileID: 1351517657377250467}
+  - component: {fileID: 6717879822285682012}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -239,11 +240,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 174398b09f49d3e49b82db54aeedb0ec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerShooter
-  armaActual: {fileID: 11400000, guid: c43664a1678fde84c96b59725ec4a4cf, type: 2}
+  armaActual: {fileID: 0}
   puntoDeDisparo: {fileID: 0}
   socketArma: {fileID: 8337280459373957368}
   fuerzaLanzamientoTrampa: 15
   anguloElevacionTrampa: 5
+  tiempoMaximoVueloBoomerang: 10
+  capasIgnoradasApuntado:
+    serializedVersion: 2
+    m_Bits: 8
+  distanciaMaximaApuntado: 100
+  margenSpawnBala: 0.2
+  anguloMaximoCorreccion: 45
+--- !u!114 &6717879822285682012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1900672239890361466}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fdd8862da1fac34884f1a5b8f21db07, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameJuicePlayer
+  multiplicadorEstiramiento: 0.15
+  velocidadMaxima: 20
+  multiplicadorInclinacion: 1.5
+  inclinacionMaxima: 10
+  velocidadRecuperacion: 12
+  colorFlash: {r: 1, g: 1, b: 1, a: 1}
+  duracionFlash: 0.1
 --- !u!1 &7872245060426608473
 GameObject:
   m_ObjectHideFlags: 0

@@ -17,7 +17,7 @@ MonoBehaviour:
   cadenciaDisparo: 0.8
   puntosPorBaja: 100
   titularMuerte: DEcapitado por boomerang!
-  nombrePrefabModeloArma: Boomerang
+  nombrePrefabModeloArma: BoomerangPickup
   nombrePrefabProyectilNet: Boomerang
   municionMaxima: 5
   velocidadProyectil: 18

@@ -17,9 +17,9 @@ MonoBehaviour:
     AppIdFusion: 
     AppIdChat: 
     AppIdVoice: 
-    AppVersion: 
+    AppVersion: 1.0
     UseNameServer: 1
-    FixedRegion: 
+    FixedRegion: eu
     Server: 
     Port: 0
     ProxyServer: 
@@ -59,6 +59,7 @@ MonoBehaviour:
   - RPC_LimpiarArmaAlMorir
   - RedirigirProyectil
   - RPC_RecuperarMunicionBoomerang
+  - RPC_BoomerangLanzado
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

@@ -11,20 +11,23 @@ public class ProyectilBoomerang : ProyectilBasico
     [Tooltip("Velocidad de giro sobre su propio eje")]
     public float velocidadRotacionVisual = 720f;
 
+    [Tooltip("Tiempo límite de vuelo seguro antes de autodestruirse y devolver la munición")]
+    public float tiempoMaximoVuelo = 8f;
+
     [Tooltip("Asigna aquí el objeto 3D hijo que contiene la malla del Búmeran")]
     public Transform modeloVisual;
 
     // ------------------------------------------------------------------
-    // El rol (pickup estático del suelo  vs  proyectil en vuelo) lo decide
+    // El rol (pickup estático del suelo vs proyectil en vuelo) lo decide
     // SIEMPRE el código al nacer, leyendo los InstantiationData de Photon.
-    // Por eso NO se serializa: el Inspector ya no puede dejarlo en 'true'
-    // por error y provocar que los pickups salgan volando hacia el Host.
     // ------------------------------------------------------------------
     [System.NonSerialized] public bool esProyectilActivo = false;
 
     private Vector3 posicionInicial;
     private Transform duenoTransform;
     private PlayerShooter shooterDueno;
+    private float tiempoInicioVuelo;
+    private TrailRenderer estela; // Referencia para la estela visual
 
     private HashSet<Transform> objetivosGolpeadosEnEstaFase = new HashSet<Transform>();
 
@@ -33,22 +36,64 @@ public class ProyectilBoomerang : ProyectilBasico
 
     protected override void Start()
     {
-        // 1. Decidimos el rol ANTES de que la clase base aplique velocidad,
-        //    gravedad o tiempo de vida. Este es el punto clave del arreglo.
+        // ------------------------------------------------------------------
+        // FIX ESTELA EN ZIGZAG / "ESTRELLA":
+        // Este script mueve y rota el Transform manualmente cada frame en
+        // TODOS los clientes (Update() no filtra por IsMine). Si además hay
+        // un PhotonTransformView en el mismo objeto, ese componente intenta
+        // sincronizar/interpolar el mismo Transform por red en los clientes
+        // que no son el dueño, y ambos sistemas compiten por escribir la
+        // misma posición/rotación cada frame. Ese "tira y afloja" es lo que
+        // se ve como una estela en zigzag. Lo neutralizamos por código para
+        // no depender de tocar nada en el Editor.
+        // ------------------------------------------------------------------
+        NeutralizarSincronizacionDeTransformPorRed();
+
+        // Buscamos el TrailRenderer (esté en la raíz o en un objeto hijo)
+        estela = GetComponentInChildren<TrailRenderer>();
+
+        // 1. Decidimos el rol leyendo datos de Photon
         esProyectilActivo = LeerDatosDeLanzamiento();
 
         if (!esProyectilActivo)
         {
-            // Es un arma tirada en el suelo (o colocada a mano en la escena):
-            // se queda completamente inmóvil e inerte.
+            // Pickup estático en el suelo: apagamos la estela para que no dibuje nada
+            if (estela != null) estela.enabled = false;
+            
             ConfigurarComoPickupEstatico();
-            return; // OJO: nunca llamamos a base.Start() en un pickup.
+            return; 
         }
 
-        // 2. A partir de aquí sí es un proyectil realmente disparado.
-        base.Start();
+        // Si es un proyectil activo, aseguramos que la estela esté encendida y la limpiamos
+        // para evitar el bug visual del "tirón" desde el punto 0,0,0
+        if (estela != null)
+        {
+            estela.enabled = true;
+            estela.Clear();
 
-        // Un búmeran en vuelo no debe poder recogerse como arma del suelo.
+            // Forzamos por código los valores correctos del emisor de la
+            // estela, aunque en el Editor haya quedado algún desfase de
+            // posición/rotación local o el Alignment mal puesto:
+            //  - Sin desfase local: si el objeto de la estela tuviera una
+            //    posición local distinta de (0,0,0), cualquier rotación del
+            //    padre lo haría orbitar en un círculo y generaría el mismo
+            //    efecto de zigzag.
+            //  - Alignment = View: la cinta siempre mira a cámara y su forma
+            //    depende solo del historial de posiciones, nunca de cómo
+            //    esté rotado el objeto que la emite.
+            estela.transform.localPosition = Vector3.zero;
+            estela.transform.localRotation = Quaternion.identity;
+            estela.alignment = LineAlignment.View;
+        }
+
+        // 2. NO llamamos a base.Start() para evitar que Destroy(gameObject, tiempoVida)
+        // borre el búmeran localmente y desincronice la mano del jugador.
+        if (photonView != null && photonView.Owner != null && duenoActorNumber <= 0)
+        {
+            duenoActorNumber = photonView.Owner.ActorNumber;
+        }
+
+        // Un búmeran en vuelo no debe poder recogerse como arma del suelo
         PickupArma pickupEnVuelo = GetComponent<PickupArma>();
         if (pickupEnVuelo != null)
         {
@@ -56,6 +101,7 @@ public class ProyectilBoomerang : ProyectilBasico
         }
 
         posicionInicial = transform.position;
+        tiempoInicioVuelo = Time.time;
 
         if (rb != null)
         {
@@ -67,9 +113,39 @@ public class ProyectilBoomerang : ProyectilBasico
     }
 
     /// <summary>
+    /// Si el objeto tiene un PhotonTransformView (u otro componente que
+    /// sincronice el Transform por red), lo desactiva y lo quita de los
+    /// Observed Components del PhotonView. Este proyectil ya calcula su
+    /// movimiento de forma determinista en todos los clientes, así que
+    /// sincronizarlo también por red es redundante y provoca conflictos
+    /// visibles (estela en zigzag, saltos de posición/rotación).
+    /// </summary>
+    private void NeutralizarSincronizacionDeTransformPorRed()
+    {
+        if (photonView == null)
+            return;
+
+        PhotonTransformView vistaTransformRed = GetComponent<PhotonTransformView>();
+
+        if (vistaTransformRed == null)
+            return;
+
+        vistaTransformRed.enabled = false;
+
+        if (photonView.ObservedComponents != null)
+        {
+            photonView.ObservedComponents.Remove(vistaTransformRed);
+        }
+
+        Debug.LogWarning("[ProyectilBoomerang] Se detectó y neutralizó un PhotonTransformView " +
+            "en este objeto: competía con el movimiento manual del script y causaba la estela " +
+            "en zigzag. Puedes eliminar el componente del prefab con tranquilidad si quieres " +
+            "dejarlo limpio también en el Editor.");
+    }
+
+    /// <summary>
     /// Lee los InstantiationData que envía PlayerShooter al disparar.
     /// Devuelve true solo si el objeto fue lanzado por un jugador.
-    /// De paso recoge el ActorNumber del dueño de forma determinista.
     /// </summary>
     private bool LeerDatosDeLanzamiento()
     {
@@ -83,30 +159,36 @@ public class ProyectilBoomerang : ProyectilBasico
 
         bool fueLanzado = false;
 
-        for (int i = 0; i < data.Length; i++)
+        if (data[0] is bool marcaDeLanzamiento)
         {
-            if (data[i] is bool marcaDeLanzamiento)
+            fueLanzado = marcaDeLanzamiento;
+        }
+
+        // Leemos los datos en el orden exacto que los enviamos desde PlayerShooter
+        if (fueLanzado && data.Length >= 6)
+        {
+            duenoActorNumber = (int)data[1];
+            velocidad = (float)data[2];
+            dano = (int)(float)data[3];
+            titularMuerte = (string)data[4];
+            puntosPorBaja = (int)data[5];
+        }
+        else if (fueLanzado)
+        {
+            for (int i = 0; i < data.Length; i++)
             {
-                if (marcaDeLanzamiento)
-                    fueLanzado = true;
-            }
-            else if (data[i] is int actorNumber && actorNumber > 0)
-            {
-                duenoActorNumber = actorNumber;
+                if (data[i] is int actorNumber && actorNumber > 0)
+                {
+                    duenoActorNumber = actorNumber;
+                }
             }
         }
 
         return fueLanzado;
     }
 
-    /// <summary>
-    /// Deja el objeto totalmente quieto. Al deshabilitar el componente,
-    /// Unity deja de enviarle Update() y OnTriggerEnter(), así que este
-    /// script no puede interferir con el PickupArma del mismo objeto.
-    /// </summary>
     private void ConfigurarComoPickupEstatico()
     {
-        // 'rb' puede no estar todavía asignado porque no ejecutamos base.Start().
         Rigidbody cuerpo = rb != null ? rb : GetComponent<Rigidbody>();
 
         if (cuerpo != null)
@@ -146,6 +228,15 @@ public class ProyectilBoomerang : ProyectilBasico
         if (!esProyectilActivo) return;
 
         RotarModeloVisual();
+
+        // Red de seguridad: si supera el tiempo máximo de vuelo sin volver,
+        // se destruye sincronizadamente por red y recupera la munición.
+        if (Time.time - tiempoInicioVuelo >= tiempoMaximoVuelo)
+        {
+            AvisarRecuperacionMunicion();
+            DestruirProyectil();
+            return;
+        }
 
         if (estadoActual == EstadoBoomerang.Yendo)
         {
@@ -223,7 +314,7 @@ public class ProyectilBoomerang : ProyectilBasico
 
     private void AvisarRecuperacionMunicion()
     {
-        if (!PhotonNetwork.IsMasterClient)
+        if (PhotonNetwork.LocalPlayer.ActorNumber != duenoActorNumber)
             return;
 
         if (shooterDueno == null)
@@ -246,7 +337,6 @@ public class ProyectilBoomerang : ProyectilBasico
     [PunRPC]
     public override void RedirigirProyectil(Vector3 nuevaDireccion, int nuevoDuenoActorNumber)
     {
-        // Si alguien golpea el búmeran, sigue siendo un proyectil activo.
         if (!esProyectilActivo)
             return;
 
@@ -256,6 +346,7 @@ public class ProyectilBoomerang : ProyectilBasico
         BuscarTransformDueno();
 
         posicionInicial = transform.position;
+        tiempoInicioVuelo = Time.time; 
         estadoActual = EstadoBoomerang.Yendo;
         objetivosGolpeadosEnEstaFase.Clear();
 
@@ -270,20 +361,17 @@ public class ProyectilBoomerang : ProyectilBasico
         {
             rb.velocity = nuevaDireccion.normalized * velocidad;
         }
-
-        Debug.Log($"<color=cyan>[BÚMERAN] Redirigido y potenciado por el jugador: {nuevoDuenoActorNumber}</color>");
     }
 
     protected override void OnTriggerEnter(Collider other)
     {
         if (!esProyectilActivo) return;
 
-        if (!PhotonNetwork.IsMasterClient && !photonView.IsMine)
+        if (PhotonNetwork.LocalPlayer.ActorNumber != duenoActorNumber)
             return;
 
         PhotonView pvImpactado = other.GetComponentInParent<PhotonView>();
 
-        // Ignorar daño al dueño actual del proyectil
         if (pvImpactado != null && pvImpactado.Owner != null && pvImpactado.Owner.ActorNumber == duenoActorNumber)
         {
             return;

@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 9073685795765868186}
   - component: {fileID: 9214547884412240483}
   - component: {fileID: -3435173162969662448}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: BoomerangPickup
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -151,6 +151,10 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 46aea306270cba74da32407dbc490512, type: 3}
       propertyPath: m_Name
       value: boomerang
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 46aea306270cba74da32407dbc490512, type: 3}
+      propertyPath: m_Layer
+      value: 3
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

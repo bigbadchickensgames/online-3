@@ -1,7 +1,7 @@
 using UnityEngine;
 using Photon.Pun;
 
-public class ProyectilBasico : MonoBehaviourPun
+public class ProyectilBasico : MonoBehaviourPun, IPunInstantiateMagicCallback
 {
     [Header("Configuración del Proyectil")]
     public float velocidad = 20f;
@@ -20,9 +20,41 @@ public class ProyectilBasico : MonoBehaviourPun
         rb = GetComponent<Rigidbody>();
     }
 
+    public virtual void OnPhotonInstantiate(PhotonMessageInfo info)
+    {
+        object[] instantiationData = info.photonView.InstantiationData;
+        if (instantiationData != null && instantiationData.Length >= 6)
+        {
+            if (instantiationData[1] is int actorNum)
+            {
+                duenoActorNumber = actorNum;
+            }
+            if (instantiationData[2] is float vel)
+            {
+                velocidad = vel;
+            }
+            if (instantiationData[3] is float danoFloat)
+            {
+                dano = Mathf.RoundToInt(danoFloat);
+            }
+            else if (instantiationData[3] is int danoInt)
+            {
+                dano = danoInt;
+            }
+            if (instantiationData[4] is string titular)
+            {
+                titularMuerte = titular;
+            }
+            if (instantiationData[5] is int puntos)
+            {
+                puntosPorBaja = puntos;
+            }
+        }
+    }
+
     protected virtual void Start()
     {
-        if (photonView != null && photonView.Owner != null)
+        if (duenoActorNumber == -1 && photonView != null && photonView.Owner != null)
         {
             duenoActorNumber = photonView.Owner.ActorNumber;
         }
@@ -73,7 +105,6 @@ public class ProyectilBasico : MonoBehaviourPun
 
         PhotonView pvImpactado = other.GetComponentInParent<PhotonView>();
 
-        // Evitar que la bala golpee a su dueño actual
         if (pvImpactado != null && pvImpactado.Owner != null && pvImpactado.Owner.ActorNumber == duenoActorNumber)
         {
             return;

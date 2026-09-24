@@ -21,6 +21,19 @@ public class PlayerShooter : MonoBehaviourPun
     [Tooltip("Segundos tras los cuales se da por perdido un búmeran que no ha vuelto (evita quedarse con el arma bloqueada e invisible).")]
     public float tiempoMaximoVueloBoomerang = 10f;
 
+    [Header("Apuntado y Origen del Disparo")]
+    [Tooltip("Capas que el raycast de apuntado y el de origen libre ignoran (p. ej. Pickup). El propio jugador se ignora siempre por jerarquía; los rivales siguen siendo apuntables.")]
+    public LayerMask capasIgnoradasApuntado;
+
+    [Tooltip("Distancia máxima del raycast de apuntado desde la cámara.")]
+    public float distanciaMaximaApuntado = 100f;
+
+    [Tooltip("Separación (m) respecto a la superficie cuando PuntoDisparo queda dentro de la geometría.")]
+    public float margenSpawnBala = 0.2f;
+
+    [Tooltip("Si la dirección hacia la mira se desvía más de estos grados del forward de la cámara, se dispara recto según camera.forward.")]
+    public float anguloMaximoCorreccion = 45f;
+
     private int municionRestante;
     private bool tieneTrampaDisponible;
     private float tiempoUltimoDisparo;
@@ -29,15 +42,22 @@ public class PlayerShooter : MonoBehaviourPun
     private float tiempoLanzamientoBoomerang = 0f;
 
     private PlayerController controladorJugador;
+    private Collider colliderJugador;
 
     private GameObject modeloArmaActualInstancia;
 
     private Coroutine corrutinaMeleeActual = null;
     private Quaternion rotacionAnimacionMelee = Quaternion.identity;
 
+    private int MascaraApuntado
+    {
+        get { return Physics.DefaultRaycastLayers & ~capasIgnoradasApuntado.value; }
+    }
+
     private void Start()
     {
         controladorJugador = GetComponent<PlayerController>();
+        colliderJugador = GetComponent<Collider>();
 
         if (armaActual != null)
         {
@@ -160,9 +180,6 @@ public class PlayerShooter : MonoBehaviourPun
 
     private void ComprobarAgotamientoArma()
     {
-        // El búmeran NO se desequipa mientras está volando:
-        // esperamos a que vuelva a la mano para gastar la bala
-        // y, si era la última, entonces sí se pierde el arma.
         if (
             armaActual != null &&
             armaActual.esBoomerang &&
@@ -223,9 +240,6 @@ public class PlayerShooter : MonoBehaviourPun
         modeloArmaActualInstancia.transform.localScale =
             prefabModelo.transform.localScale;
 
-        // --- DESACTIVAR / DESTRUIR COMPONENTES NO DESEADOS EN LA MANO ---
-        // Permite reutilizar prefabs de Proyectil/Pickup como armas en la mano sin fallos.
-
         foreach (
             PickupArma pickup
             in modeloArmaActualInstancia.GetComponentsInChildren<PickupArma>()
@@ -258,7 +272,6 @@ public class PlayerShooter : MonoBehaviourPun
             Destroy(pv);
         }
 
-        // Destruye cualquier script de comportamiento o proyectil adjunto al modelo de la mano
         MonoBehaviour[] scripts = modeloArmaActualInstancia.GetComponentsInChildren<MonoBehaviour>();
         foreach (MonoBehaviour script in scripts)
         {
@@ -296,9 +309,6 @@ public class PlayerShooter : MonoBehaviourPun
         if (!photonView.IsMine || armaActual == null)
             return;
 
-        // --- SEGURO ANTI-BLOQUEO DEL BÚMERAN ---
-        // Si el proyectil se destruyó por el camino y nunca volvió,
-        // lo damos por recuperado para no quedarnos sin arma usable.
         if (
             boomerangEnVuelo &&
             Time.time >= tiempoLanzamientoBoomerang + tiempoMaximoVueloBoomerang
@@ -310,7 +320,6 @@ public class PlayerShooter : MonoBehaviourPun
             );
         }
 
-        // Mientras el búmeran está fuera no se puede volver a lanzar.
         if (armaActual.esBoomerang && boomerangEnVuelo)
             return;
 
@@ -358,12 +367,140 @@ public class PlayerShooter : MonoBehaviourPun
         }
     }
 
+    private bool BuscarImpactoMasCercano(
+        Vector3 origen,
+        Vector3 direccion,
+        float distancia,
+        out RaycastHit mejorImpacto
+    )
+    {
+        mejorImpacto = default;
+
+        RaycastHit[] impactos = Physics.RaycastAll(
+            origen,
+            direccion,
+            distancia,
+            MascaraApuntado,
+            QueryTriggerInteraction.Ignore
+        );
+
+        float mejorDistancia = float.MaxValue;
+        bool hayImpacto = false;
+
+        for (int i = 0; i < impactos.Length; i++)
+        {
+            Collider c = impactos[i].collider;
+
+            if (c == null || c.transform.IsChildOf(transform))
+                continue;
+
+            if (impactos[i].distance < mejorDistancia)
+            {
+                mejorDistancia = impactos[i].distance;
+                mejorImpacto = impactos[i];
+                hayImpacto = true;
+            }
+        }
+
+        return hayImpacto;
+    }
+
+    private Vector3 ObtenerPuntoDeMira()
+    {
+        Camera cam = Camera.main;
+
+        if (cam == null)
+        {
+            return puntoDeDisparo.position +
+                   puntoDeDisparo.forward * distanciaMaximaApuntado;
+        }
+
+        Transform tCam = cam.transform;
+
+        float profundidadJugador =
+            Vector3.Dot(transform.position - tCam.position, tCam.forward);
+
+        Vector3 origen =
+            tCam.position + tCam.forward * Mathf.Max(0f, profundidadJugador);
+
+        if (
+            BuscarImpactoMasCercano(
+                origen,
+                tCam.forward,
+                distanciaMaximaApuntado,
+                out RaycastHit impacto
+            )
+        )
+        {
+            return impacto.point;
+        }
+
+        return origen + tCam.forward * distanciaMaximaApuntado;
+    }
+
+    private Vector3 ObtenerOrigenLibreDeDisparo()
+    {
+        Vector3 origenDeseado = puntoDeDisparo.position;
+
+        Vector3 centroCuerpo =
+            colliderJugador != null
+                ? colliderJugador.bounds.center
+                : transform.position + Vector3.up;
+
+        Vector3 haciaPunto = origenDeseado - centroCuerpo;
+        float distancia = haciaPunto.magnitude;
+
+        if (distancia < 0.001f)
+            return origenDeseado;
+
+        if (
+            BuscarImpactoMasCercano(
+                centroCuerpo,
+                haciaPunto / distancia,
+                distancia,
+                out RaycastHit obstaculo
+            )
+        )
+        {
+            return obstaculo.point + obstaculo.normal * margenSpawnBala;
+        }
+
+        return origenDeseado;
+    }
+
+    private void CalcularOrigenYRotacionDeDisparo(
+        out Vector3 posicion,
+        out Quaternion rotacion
+    )
+    {
+        posicion = ObtenerOrigenLibreDeDisparo();
+        rotacion = puntoDeDisparo.rotation;
+
+        Camera cam = Camera.main;
+
+        if (cam == null)
+            return;
+
+        Vector3 forwardCamara = cam.transform.forward;
+        Vector3 haciaObjetivo = ObtenerPuntoDeMira() - posicion;
+
+        Vector3 direccion =
+            (
+                haciaObjetivo.sqrMagnitude < 0.0001f ||
+                Vector3.Angle(haciaObjetivo, forwardCamara) > anguloMaximoCorreccion
+            )
+                ? forwardCamara
+                : haciaObjetivo.normalized;
+
+        rotacion = Quaternion.LookRotation(direccion);
+
+        Debug.DrawRay(posicion, direccion * 10f, Color.green, 2f);
+    }
+
     private void DispararBala()
     {
         if (armaActual.esBoomerang)
         {
-            // La bala NO se descuenta al lanzar.
-            // Se descuenta cuando el búmeran vuelve a la mano.
             photonView.RPC(
                 nameof(RPC_BoomerangLanzado),
                 RpcTarget.All
@@ -374,32 +511,24 @@ public class PlayerShooter : MonoBehaviourPun
             municionRestante--;
         }
 
-        Quaternion rotacionDisparo = puntoDeDisparo.rotation;
+        CalcularOrigenYRotacionDeDisparo(
+            out Vector3 posicionDisparo,
+            out Quaternion rotacionDisparo
+        );
 
-        if (Camera.main != null)
-        {
-            Vector3 puntoObjetivoMira = Camera.main.transform.position + (Camera.main.transform.forward * 100f);
-
-            if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out RaycastHit hit, 100f))
-            {
-                puntoObjetivoMira = hit.point;
-            }
-
-            rotacionDisparo = Quaternion.LookRotation(puntoObjetivoMira - puntoDeDisparo.position);
-        }
-
-        // === DATOS DE LANZAMIENTO ===
-        // El 'true' marca el objeto como PROYECTIL REALMENTE DISPARADO.
-        // Los pickups del suelo nacen sin esta marca, así que se quedan quietos.
         object[] datosLanzamiento =
         {
             true,
-            photonView.Owner.ActorNumber
+            photonView.Owner.ActorNumber,
+            armaActual.velocidadProyectil,
+            armaActual.dano,
+            armaActual.titularMuerte,
+            armaActual.puntosPorBaja
         };
 
         GameObject bala = PhotonNetwork.Instantiate(
             armaActual.nombrePrefabProyectilNet,
-            puntoDeDisparo.position,
+            posicionDisparo,
             rotacionDisparo,
             0,
             datosLanzamiento
@@ -410,12 +539,8 @@ public class PlayerShooter : MonoBehaviourPun
         if (proyectil != null)
         {
             proyectil.duenoActorNumber = photonView.Owner.ActorNumber;
-
             proyectil.velocidad = armaActual.velocidadProyectil;
-
-            // Conversión explícita float -> int
             proyectil.dano = Mathf.RoundToInt(armaActual.dano);
-
             proyectil.titularMuerte = armaActual.titularMuerte;
             proyectil.puntosPorBaja = armaActual.puntosPorBaja;
         }
@@ -455,7 +580,7 @@ public class PlayerShooter : MonoBehaviourPun
 
         PhotonNetwork.Instantiate(
             armaActual.nombrePrefabTrampaNet,
-            puntoDeDisparo.position,
+            ObtenerOrigenLibreDeDisparo(),
             Quaternion.LookRotation(
                 direccionLanzamiento
             ),
@@ -490,7 +615,6 @@ public class PlayerShooter : MonoBehaviourPun
 
         foreach (Collider col in impactados)
         {
-            // --- INTERCEPCIÓN Y DEVOLUCIÓN DE PROYECTILES ---
             if (armaActual.puedeDevolverProyectiles)
             {
                 ProyectilBasico proyectilEnemigo = col.GetComponentInParent<ProyectilBasico>();
@@ -499,29 +623,16 @@ public class PlayerShooter : MonoBehaviourPun
                     PhotonView pvProyectil = proyectilEnemigo.GetComponent<PhotonView>();
                     if (pvProyectil != null)
                     {
-                        // 1. Punto objetivo exacto adonde apunta la retícula/cámara
-                        Vector3 puntoObjetivoMira = puntoDeDisparo.position + (puntoDeDisparo.forward * 100f);
-
-                        if (Camera.main != null)
-                        {
-                            puntoObjetivoMira = Camera.main.transform.position + (Camera.main.transform.forward * 100f);
-
-                            if (Physics.Raycast(Camera.main.transform.position, Camera.main.transform.forward, out RaycastHit hit, 100f))
-                            {
-                                puntoObjetivoMira = hit.point;
-                            }
-                        }
-
-                        // 2. Dirección desde la posición ACTUAL de la bala hacia la retícula
+                        Vector3 puntoObjetivoMira = ObtenerPuntoDeMira();
                         Vector3 direccionRebote = (puntoObjetivoMira - proyectilEnemigo.transform.position).normalized;
 
-                        proyectilEnemigo.photonView.RPC("RedirigirProyectil", RpcTarget.All, direccionRebote, photonView.Owner.ActorNumber);
+                        pvProyectil.TransferOwnership(PhotonNetwork.LocalPlayer);
+                        pvProyectil.RPC("RedirigirProyectil", RpcTarget.AllViaServer, direccionRebote, photonView.Owner.ActorNumber);
                         continue;
                     }
                 }
             }
 
-            // --- PROCESO HABITUAL DE DAÑO Y MELEE ---
             PhotonView pvImpactado =
                 col.GetComponentInParent<PhotonView>();
 
@@ -541,7 +652,7 @@ public class PlayerShooter : MonoBehaviourPun
                 saludEnemigo.photonView.RPC(
                     "RecibirDano",
                     RpcTarget.All,
-                    Mathf.RoundToInt(armaActual.danoMelee), // Conversión explícita float -> int
+                    Mathf.RoundToInt(armaActual.danoMelee),
                     photonView.Owner.ActorNumber,
                     armaActual.titularMuerte,
                     armaActual.puntosPorBaja
@@ -645,16 +756,6 @@ public class PlayerShooter : MonoBehaviourPun
         corrutinaMeleeActual = null;
     }
 
-    // ------------------------------------------------------------------
-    // CICLO DEL BÚMERAN
-    //
-    //   Lanzar  -> RPC_BoomerangLanzado
-    //              (se oculta en la mano de TODOS los clientes)
-    //   Volver  -> RPC_RecuperarMunicionBoomerang
-    //              (reaparece, se gasta 1 bala y, si era la última,
-    //               el arma se pierde igual que el resto)
-    // ------------------------------------------------------------------
-
     [PunRPC]
     private void RPC_BoomerangLanzado()
     {
@@ -673,14 +774,11 @@ public class PlayerShooter : MonoBehaviourPun
         if (armaActual == null || !armaActual.esBoomerang)
             return;
 
-        // Si ya se procesó el regreso, ignoramos avisos duplicados
-        // (por ejemplo, el aviso del Master y el seguro por tiempo).
         if (!boomerangEnVuelo)
             return;
 
         boomerangEnVuelo = false;
 
-        // Ahora sí se gasta la bala: al volver a la mano.
         municionRestante--;
 
         if (modeloArmaActualInstancia != null)

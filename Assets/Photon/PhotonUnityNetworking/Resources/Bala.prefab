@@ -130,7 +130,7 @@ MonoBehaviour:
   Group: 0
   prefixField: -1
   Synchronization: 3
-  OwnershipTransfer: 0
+  OwnershipTransfer: 1
   observableSearch: 2
   ObservedComponents: []
   sceneViewId: 0
@@ -148,3 +148,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 85eab715d829d474d992194aa916f12d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProyectilBasico
+  velocidad: 20
+  dano: 10
+  titularMuerte: Jugador
+  puntosPorBaja: 100
+  tiempoVida: 5
+  duenoActorNumber: -1

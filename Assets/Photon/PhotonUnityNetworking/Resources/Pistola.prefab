@@ -9,7 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8175933705858670047}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: PuntoDisparo
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -45,7 +45,7 @@ GameObject:
   - component: {fileID: 7859938840030262646}
   - component: {fileID: 462235199979698488}
   - component: {fileID: 8682853452735555814}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Pistola
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -160,6 +160,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PickupArma
   datosArma: {fileID: 0}
   velocidadRotacion: 50
+  velocidadFlote: 2.5
+  amplitudFlote: 0.15
+  offsetAltura: 0.8
+  modeloVisual: {fileID: 0}
 --- !u!114 &8682853452735555814
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,6 +9,10 @@ using Photon.Realtime;
 
 public class AutoLobbyManager : MonoBehaviourPunCallbacks
 {
+    [Header("Lista de salas")]
+    [SerializeField] private float intervaloAutoRecarga = 8f;   // segundos entre resincronizaciones con el panel abierto
+    [SerializeField] private float tiempoSeguroRecarga = 3f;    // si algo no responde, se libera el estado tras estos segundos
+
     private Canvas canvas;
 
     // Paneles principales
@@ -26,6 +31,10 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
     private Transform contenedorSalas;
     private GameObject botonIniciarHost;
 
+    // Botón de recarga
+    private Button botonRecargar;
+    private TMP_Text textoBotonRecargar;
+
     // Paleta de Colores UI (Estilo Cyber-Dark Moderno)
     private readonly Color colTarjeta      = new Color(0.12f, 0.14f, 0.20f, 0.90f);
     private readonly Color colPrimario     = new Color(0.38f, 0.31f, 0.86f, 1.00f);
@@ -36,7 +45,14 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
     private readonly Color colTextoMutado  = new Color(0.55f, 0.60f, 0.70f, 1.00f);
 
     private Sprite spriteBordeRedondeado;
+
+    // Caché local de salas (OnRoomListUpdate solo entrega cambios)
     private Dictionary<string, RoomInfo> listaSalasCache = new Dictionary<string, RoomInfo>();
+
+    // Estado de sincronización con el lobby
+    private bool recargandoLobby = false;     // ciclo LeaveLobby -> JoinLobby en curso
+    private bool esperandoSnapshot = false;   // el próximo OnRoomListUpdate es la lista completa y sustituye la caché
+    private Coroutine rutinaSeguro;
 
     void Start()
     {
@@ -44,6 +60,7 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
         GenerarSpriteRedondeado();
         ConstruirUIPorCodigo();
         MostrarPanel(panelConexion);
+        StartCoroutine(RutinaAutoRecarga());
     }
 
     private void GenerarSpriteRedondeado()
@@ -65,7 +82,7 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
         GameObject canvasGO = new GameObject("Canvas_AutoLobby");
         canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        
+
         CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
@@ -95,7 +112,7 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
         // --- Panel 2: Selección de Modo ---
         CrearTextoHeader(panelSeleccionModo.transform, "MENÚ PRINCIPAL", "Selecciona una modalidad de juego");
         CrearBotonEstilizado(panelSeleccionModo.transform, "CREAR PARTIDA (HOST)", colPrimario, () => MostrarPanel(panelCrearPartida), 900, 85, 22);
-        CrearBotonEstilizado(panelSeleccionModo.transform, "BUSCAR PARTIDAS", colSecundario, () => MostrarPanel(panelBuscarPartida), 900, 85, 22);
+        CrearBotonEstilizado(panelSeleccionModo.transform, "BUSCAR PARTIDAS", colSecundario, AbrirPanelBuscar, 900, 85, 22);
 
         // --- Panel 3: Crear Partida ---
         CrearTextoHeader(panelCrearPartida.transform, "NUEVA SALA", "Asigna un nombre a tu partida multijugador");
@@ -107,8 +124,11 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
         CrearTextoHeader(panelBuscarPartida.transform, "EXPLORADOR DE SALAS", "Únete a una sala activa o introduce su nombre directo");
 
         GameObject filaBuscador = CrearFilaLayout(panelBuscarPartida.transform, 1150, 75);
-        inputNombreSalaUnirse = CrearInputField(filaBuscador.transform, "Nombre exacto de sala...", 850, 70);
-        CrearBotonEstilizado(filaBuscador.transform, "UNIRSE", colPrimario, BotonUnirsePorNombreDirecto, 260, 70, 20);
+        inputNombreSalaUnirse = CrearInputField(filaBuscador.transform, "Nombre exacto de sala...", 700, 70);
+        CrearBotonEstilizado(filaBuscador.transform, "UNIRSE", colPrimario, BotonUnirsePorNombreDirecto, 200, 70, 20);
+        GameObject btnRecargar = CrearBotonEstilizado(filaBuscador.transform, "RECARGAR", colSecundario, BotonRecargarSalas, 210, 70, 18);
+        botonRecargar = btnRecargar.GetComponent<Button>();
+        textoBotonRecargar = btnRecargar.GetComponentInChildren<TMP_Text>();
 
         GameObject scrollGO = new GameObject("ScrollView_Salas");
         scrollGO.transform.SetParent(panelBuscarPartida.transform, false);
@@ -184,8 +204,208 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
         }
     }
 
-    public override void OnConnectedToMaster() => PhotonNetwork.JoinLobby();
-    public override void OnJoinedLobby() => MostrarPanel(panelSeleccionModo);
+    // =========================================================
+    // LOBBY Y LISTA DE SALAS
+    // =========================================================
+
+    public override void OnConnectedToMaster()
+    {
+        // Diagnóstico: ambos clientes deben mostrar la MISMA región y la MISMA versión.
+        Debug.Log($"[Lobby] Conectado a Master. Región: {PhotonNetwork.CloudRegion} | AppVersion: {PhotonNetwork.AppVersion}");
+        EntrarAlLobby();
+    }
+
+    public override void OnJoinedLobby()
+    {
+        recargandoLobby = false;
+        ActualizarBotonRecargar();
+
+        // Solo navegamos al menú en la primera conexión.
+        // Si estamos recargando desde el panel de búsqueda, nos quedamos donde estamos.
+        if (panelConexion != null && panelConexion.activeSelf)
+            MostrarPanel(panelSeleccionModo);
+    }
+
+    public override void OnLeftLobby()
+    {
+        // Segunda mitad del ciclo de recarga: ya salimos, volvemos a entrar.
+        if (recargandoLobby && PhotonNetwork.Server == ServerConnection.MasterServer)
+            EntrarAlLobby();
+    }
+
+    // Entra al lobby marcando que la próxima lista recibida es una foto completa.
+    // El flag se pone ANTES de pedir el JoinLobby para no depender del orden de los mensajes.
+    private void EntrarAlLobby()
+    {
+        if (!PhotonNetwork.IsConnected)
+            return;
+
+        esperandoSnapshot = true;
+        ActualizarBotonRecargar();
+        ArmarSeguro();
+        PhotonNetwork.JoinLobby();
+    }
+
+    public void AbrirPanelBuscar()
+    {
+        MostrarPanel(panelBuscarPartida);
+        RenderizarListaSalas();      // pinta la caché al instante, sin esperar al callback
+        ActualizarBotonRecargar();
+        IniciarRecarga();            // y pide una lista fresca
+    }
+
+    public void BotonRecargarSalas()
+    {
+        IniciarRecarga();
+    }
+
+    private void IniciarRecarga()
+    {
+        if (recargandoLobby || esperandoSnapshot)
+            return;
+
+        if (!PhotonNetwork.IsConnected || PhotonNetwork.Server != ServerConnection.MasterServer)
+            return;
+
+        recargandoLobby = true;
+        ActualizarBotonRecargar();
+        ArmarSeguro();
+
+        if (PhotonNetwork.InLobby)
+            PhotonNetwork.LeaveLobby();   // continúa en OnLeftLobby -> EntrarAlLobby
+        else
+            EntrarAlLobby();
+    }
+
+    private IEnumerator RutinaAutoRecarga()
+    {
+        while (true)
+        {
+            yield return new WaitForSecondsRealtime(intervaloAutoRecarga);
+
+            if (panelBuscarPartida != null && panelBuscarPartida.activeSelf)
+                IniciarRecarga();
+        }
+    }
+
+    // Red de seguridad: si algún mensaje no llega, no dejamos el botón bloqueado
+    // y, si el lobby estaba vacío (Photon no envía lista), limpiamos la caché.
+    private void ArmarSeguro()
+    {
+        if (rutinaSeguro != null)
+            StopCoroutine(rutinaSeguro);
+
+        rutinaSeguro = StartCoroutine(RutinaSeguro());
+    }
+
+    private IEnumerator RutinaSeguro()
+    {
+        yield return new WaitForSecondsRealtime(tiempoSeguroRecarga);
+
+        rutinaSeguro = null;
+
+        if (esperandoSnapshot)
+            listaSalasCache.Clear();
+
+        esperandoSnapshot = false;
+        recargandoLobby = false;
+
+        RenderizarListaSalas();
+        ActualizarBotonRecargar();
+    }
+
+    private void ActualizarBotonRecargar()
+    {
+        bool ocupado = recargandoLobby || esperandoSnapshot;
+
+        if (botonRecargar != null)
+            botonRecargar.interactable = !ocupado;
+
+        if (textoBotonRecargar != null)
+            textoBotonRecargar.text = ocupado ? "ACTUALIZANDO..." : "RECARGAR";
+    }
+
+    public override void OnRoomListUpdate(List<RoomInfo> roomList)
+    {
+        // La primera lista tras entrar al lobby es la foto completa: sustituye la caché
+        // (así desaparecen las salas que se cerraron mientras no estábamos en el lobby).
+        if (esperandoSnapshot)
+        {
+            listaSalasCache.Clear();
+            esperandoSnapshot = false;
+        }
+
+        // Las siguientes solo traen cambios.
+        foreach (RoomInfo info in roomList)
+        {
+            if (info.RemovedFromList || !info.IsVisible || !info.IsOpen)
+                listaSalasCache.Remove(info.Name);
+            else
+                listaSalasCache[info.Name] = info;
+        }
+
+        RenderizarListaSalas();
+        ActualizarBotonRecargar();
+    }
+
+    private void RenderizarListaSalas()
+    {
+        if (contenedorSalas == null)
+            return;
+
+        // Limpiamos los elementos anteriores (los desactivamos ya para que el layout no los cuente)
+        foreach (Transform child in contenedorSalas)
+        {
+            child.gameObject.SetActive(false);
+            Destroy(child.gameObject);
+        }
+
+        if (listaSalasCache.Count == 0)
+        {
+            TMP_Text vacio = CrearTexto(
+                contenedorSalas,
+                "No hay salas disponibles ahora mismo. Pulsa RECARGAR o crea una partida.",
+                20,
+                colTextoMutado,
+                TextAlignmentOptions.Center
+            );
+
+            LayoutElement leVacio = vacio.gameObject.AddComponent<LayoutElement>();
+            leVacio.preferredHeight = 60;
+            leVacio.minHeight = 60;
+            return;
+        }
+
+        foreach (var sala in listaSalasCache.Values)
+        {
+            string nombreSala = sala.Name;
+            bool llena = sala.MaxPlayers > 0 && sala.PlayerCount >= sala.MaxPlayers;
+
+            string etiqueta = $"{sala.Name}    [{sala.PlayerCount}/{sala.MaxPlayers}]";
+            if (llena)
+                etiqueta += "    LLENA";
+
+            GameObject btnSala = CrearBotonEstilizado(
+                contenedorSalas,
+                etiqueta,
+                colSecundario,
+                () => PhotonNetwork.JoinRoom(nombreSala),
+                1100, 60, 20
+            );
+
+            // Una sala llena no se puede pulsar (JoinRoom fallaría sin avisar)
+            btnSala.GetComponent<Button>().interactable = !llena;
+
+            // Aseguramos que el Layout preserve la altura fija en la lista
+            LayoutElement le = btnSala.AddComponent<LayoutElement>();
+            le.preferredHeight = 60;
+            le.minHeight = 60;
+        }
+    }
+
+    // =========================================================
+    // CREAR / UNIRSE / SALA DE ESPERA
+    // =========================================================
 
     public void BotonConfirmarCrearSala()
     {
@@ -202,45 +422,13 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
             PhotonNetwork.JoinRoom(inputNombreSalaUnirse.text);
     }
 
-    public override void OnRoomListUpdate(List<RoomInfo> roomList)
-    {
-        foreach (RoomInfo info in roomList)
-        {
-            if (info.RemovedFromList || !info.IsVisible || !info.IsOpen)
-                listaSalasCache.Remove(info.Name);
-            else
-                listaSalasCache[info.Name] = info;
-        }
-        RenderizarListaSalas();
-    }
-
-    private void RenderizarListaSalas()
-{
-    // Limpiamos los elementos anteriores de la lista
-    foreach (Transform child in contenedorSalas) Destroy(child.gameObject);
-
-    foreach (var sala in listaSalasCache.Values)
-    {
-        string nombreSala = sala.Name;
-        
-        // Creamos el botón directamente en el contenedor pasándole un ancho real (1100px)
-        GameObject btnSala = CrearBotonEstilizado(
-            contenedorSalas, 
-            $"{sala.Name}    [{sala.PlayerCount}/{sala.MaxPlayers}]", 
-            colSecundario, 
-            () => PhotonNetwork.JoinRoom(nombreSala), 
-            1100, 60, 20
-        );
-
-        // Aseguramos que el Layout preserve la altura fija en la lista
-        LayoutElement le = btnSala.AddComponent<LayoutElement>();
-        le.preferredHeight = 60;
-        le.minHeight = 60;
-    }
-}
-
     public override void OnJoinedRoom()
     {
+        // Al entrar en una sala dejamos de sincronizar el lobby.
+        recargandoLobby = false;
+        esperandoSnapshot = false;
+        ActualizarBotonRecargar();
+
         MostrarPanel(panelSalaEspera);
         textoNombreSalaActual.text = "SALA: " + PhotonNetwork.CurrentRoom.Name.ToUpper();
         ActualizarListaJugadores();
@@ -271,6 +459,10 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
 
     public void BotonSalirDeLaSala() => PhotonNetwork.LeaveRoom();
     public override void OnLeftRoom() => MostrarPanel(panelSeleccionModo);
+
+    // =========================================================
+    // HELPERS DE UI
+    // =========================================================
 
     private GameObject CrearTarjetaCentrada(string nombre, float ancho, float alto)
     {
@@ -319,7 +511,7 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
     {
         GameObject contenedor = new GameObject("HeaderGroup");
         contenedor.transform.SetParent(padre, false);
-        
+
         RectTransform rtContenedor = contenedor.AddComponent<RectTransform>();
         rtContenedor.sizeDelta = new Vector2(1000, 100);
 
@@ -360,7 +552,7 @@ public class AutoLobbyManager : MonoBehaviourPunCallbacks
 
         Color cTexto = colTexto.HasValue ? colTexto.Value : colTextoPrincipal;
         TMP_Text txt = CrearTexto(go.transform, texto, tamanoTexto, cTexto, TextAlignmentOptions.Center, FontStyles.Bold);
-        
+
         RectTransform rtTxt = txt.GetComponent<RectTransform>();
         rtTxt.anchorMin = Vector2.zero; rtTxt.anchorMax = Vector2.one;
         rtTxt.sizeDelta = Vector2.zero;
