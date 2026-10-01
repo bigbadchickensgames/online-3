@@ -44,26 +44,6 @@ MonoBehaviour:
   - RegistrarMuerte
   - ReiniciarRondaEnClientes
   - DestruirTrampaRPC
-<<<<<<< Updated upstream
-=======
-  - RPC_MostrarFinDeRonda
-  - RPC_NotificarSpawn
-  - RPC_RegistrarMuerte
-  - RPC_ReiniciarRonda
-  - RPC_ActualizarModeloArma
-  - RPC_AplicarRalentizacion
-  - RPC_ReproducirAnimacionMelee
-  - AsignarNombreDatosArma
-  - RPC_DestruirPickup
-  - RPC_EquiparArmaRed
-  - RPC_SolicitarDestruccion
-  - RPC_DesequiparArmaRed
-  - RPC_LimpiarArmaAlMorir
-  - RedirigirProyectil
-  - RPC_RecuperarMunicionBoomerang
-  - RPC_BoomerangLanzado
-  - RPC_AplicarKnockback
->>>>>>> Stashed changes
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 0

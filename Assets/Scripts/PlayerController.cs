@@ -22,7 +22,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
     public bool EstaVivo { get; private set; } = true;
 
-    private float tiempoFinKnockback = 0f;
     private Rigidbody rb;
     private Collider col;
     private bool enSuelo;
@@ -113,19 +112,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
     {
         if (!photonView.IsMine || !EstaVivo) return;
 
-        // NUEVO: Si estamos aturdidos por el knockback, NO aplicamos movimiento de teclado
-        if (Time.time < tiempoFinKnockback)
-        {
-            // Solo dejamos que actúe la gravedad para que caiga natural
-            Vector3 vel = rb.linearVelocity;
-            float multiplicador = vel.y < 0 ? multiplicadorCaida : multiplicadorSubida;
-            vel.y += -gravedadBase * multiplicador * Time.fixedDeltaTime;
-            rb.linearVelocity = vel;
-
-            return; // Salimos de la función aquí para no sobrescribir la fuerza del puño
-        }
-
-        // --- A partir de aquí, el código original de FixedUpdate ---
         enSuelo = Physics.CheckSphere(
             transform.position - new Vector3(0, col.bounds.extents.y, 0),
             distanciaCheckSuelo,
@@ -146,11 +132,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
             direccionMovimiento = (camForward * direccionInput.z + camRight * direccionInput.x).normalized;
 
-<<<<<<< Updated upstream
             if (direccionMovimiento.sqrMagnitude > 0.001f)
-=======
-            if (direccionMovimiento.sqrMagnitude > 0.001f && !girandoParaDisparar)
->>>>>>> Stashed changes
             {
                 Quaternion rotacionObjetivo = Quaternion.LookRotation(direccionMovimiento);
                 rb.MoveRotation(Quaternion.Slerp(rb.rotation, rotacionObjetivo, velocidadRotacion * Time.fixedDeltaTime));
@@ -167,8 +149,8 @@ public class PlayerController : MonoBehaviourPunCallbacks
         }
         saltoPresionado = false;
 
-        float multiplicadorGravedad = velocidadActual.y < 0 ? multiplicadorCaida : multiplicadorSubida;
-        velocidadActual.y += -gravedadBase * multiplicadorGravedad * Time.fixedDeltaTime;
+        float multiplicador = velocidadActual.y < 0 ? multiplicadorCaida : multiplicadorSubida;
+        velocidadActual.y += -gravedadBase * multiplicador * Time.fixedDeltaTime;
 
         rb.linearVelocity = new Vector3(movimiento.x, velocidadActual.y, movimiento.z);
     }
@@ -222,49 +204,5 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
         velocidad = velocidadGuardadaOriginal;
         estaResbalando = false;
-    }
-
-    // Llamado EXCLUSIVAMENTE por el Host desde el proyectil
-    public void AplicarKnockbackRed(Vector3 direccion, float fuerza)
-    {
-        if (PhotonNetwork.IsMasterClient)
-        {
-            photonView.RPC(nameof(RPC_AplicarKnockback), RpcTarget.All, direccion, fuerza);
-        }
-    }
-
-    [PunRPC]
-    private void RPC_AplicarKnockback(Vector3 direccion, float fuerza)
-    {
-        if (rb != null)
-        {
-            rb.linearVelocity = Vector3.zero;
-            direccion.y += 0.3f;
-
-            // Todos aplican la fuerza al recibir la orden del Host
-            rb.AddForce(direccion.normalized * fuerza, ForceMode.Impulse);
-
-            if (photonView.IsMine)
-            {
-                // El dueño detiene su input para no frenar el vuelo
-                tiempoFinKnockback = Time.time + 0.5f;
-            }
-            else
-            {
-                // Los espectadores pausan la red un instante para ver la física fluida
-                StartCoroutine(SuspenderSincronizacion(0.5f));
-            }
-        }
-    }
-
-    private System.Collections.IEnumerator SuspenderSincronizacion(float duracion)
-    {
-        PhotonTransformView vistaRed = GetComponent<PhotonTransformView>();
-
-        if (vistaRed != null) vistaRed.enabled = false;
-
-        yield return new WaitForSeconds(duracion);
-
-        if (vistaRed != null) vistaRed.enabled = true;
     }
 }
